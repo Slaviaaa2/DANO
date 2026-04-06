@@ -1,0 +1,25 @@
+# Build output
+bin/
+obj/
+
+# NuGet
+/packages/
+*.nupkg
+
+# IDE - Rider / Visual Studio
+.idea/
+*.sln.DotSettings.user
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+_ReSharper.Caches/
+*.rsuser
+
+# Claude Code session files
+.claude/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
