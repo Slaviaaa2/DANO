@@ -108,8 +108,8 @@ dotnet build DANO.Template/DANO.Template.csproj -c Debug
 ```
 
 > **Note:** ビルドには参照 DLL が必要です。環境変数でパスを設定できます：
-> - `STRAFTAT_DIR` — ゲームルート（デフォルト: `D:\SteamLibrary\steamapps\common\STRAFTAT`）
-> - `STRAFTAT_LIBS` — 参照 DLL 置き場（デフォルト: `D:\RiderWorks\STRAFTAT_Libs`）
+> - `STRAFTAT_DIR` — ゲームルート
+> - `STRAFTAT_LIBS` — 参照 DLL 置き場
 
 ## ライセンス
 
