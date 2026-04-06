@@ -3,8 +3,6 @@ using DANO.Events;
 using DANO.Plugin;
 using UnityEngine;
 
-// STRAFTAT の matchmaking pool に影響しないよう vanilla 互換として登録
-[assembly: ComputerysModdingUtilities.StraftatMod(isVanillaCompatible: true)]
 
 namespace MyPlugin
 {

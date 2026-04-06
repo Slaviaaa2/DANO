@@ -45,7 +45,7 @@ dotnet build DANO.Template/DANO.Template.csproj -c Debug
 - **BepInEx 5.4.23.4** (Mono) / **HarmonyX** / **.NET Framework 4.7.2**
 - **Unity 2021.3.45** / **FishNet** (ネットワーク) / **TextMeshPro** (UI テキスト)
 - **Newtonsoft.Json** (設定ファイル)
-- **ComputerysModdingUtilities** — `[assembly: StraftatMod(isVanillaCompatible: true)]` でバニラ matchmaking 互換
+- **ComputerysModdingUtilities** — DANO は非バニラ互換（専用 matchmaking pool）
 
 ## 判明している制約・注意点
 

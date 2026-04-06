@@ -7,40 +7,39 @@
     <RootNamespace>MyPlugin</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-
-    <!-- ビルド時に DANO のプラグインフォルダへ自動コピー -->
-    <OutputPath>D:\SteamLibrary\steamapps\common\STRAFTAT\DANO\mods\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <!-- 依存 DLL はコピー不要（DANO.Core と同じフォルダに既にある） -->
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <!-- 環境変数 or デフォルトパス -->
+  <PropertyGroup>
+    <StraftatDir Condition="'$(STRAFTAT_DIR)' != ''">$(STRAFTAT_DIR)</StraftatDir>
+    <StraftatDir Condition="'$(StraftatDir)' == ''">D:\SteamLibrary\steamapps\common\STRAFTAT</StraftatDir>
+    <StraftatLibs Condition="'$(STRAFTAT_LIBS)' != ''">$(STRAFTAT_LIBS)</StraftatLibs>
+    <StraftatLibs Condition="'$(StraftatLibs)' == ''">D:\RiderWorks\STRAFTAT_Libs</StraftatLibs>
+    <OutputPath>$(StraftatDir)\DANO\mods\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- DANO フレームワーク本体 -->
     <Reference Include="DANO.Core">
-      <HintPath>D:\SteamLibrary\steamapps\common\STRAFTAT\BepInEx\plugins\DANO\DANO.Core.dll</HintPath>
+      <HintPath>$(StraftatDir)\BepInEx\plugins\DANO\DANO.Core.dll</HintPath>
       <Private>false</Private>
     </Reference>
 
     <!-- BepInEx（ログ用） -->
     <Reference Include="BepInEx">
-      <HintPath>D:\RiderWorks\STRAFTAT_Libs\BepInEx\BepInEx.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-
-    <!-- ゲームの MOD 互換性システム -->
-    <Reference Include="ComputerysModdingUtilities">
-      <HintPath>D:\RiderWorks\STRAFTAT_Libs\ComputerysModdingUtilities.dll</HintPath>
+      <HintPath>$(StraftatLibs)\BepInEx\BepInEx.dll</HintPath>
       <Private>false</Private>
     </Reference>
 
     <!-- Unity Engine -->
     <Reference Include="UnityEngine">
-      <HintPath>D:\RiderWorks\STRAFTAT_Libs\UnityEngine.dll</HintPath>
+      <HintPath>$(StraftatLibs)\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="UnityEngine.CoreModule">
-      <HintPath>D:\RiderWorks\STRAFTAT_Libs\UnityEngine.CoreModule.dll</HintPath>
+      <HintPath>$(StraftatLibs)\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

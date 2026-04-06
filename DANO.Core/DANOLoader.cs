@@ -9,9 +9,6 @@ using DANO.UI;
 using HarmonyLib;
 using UnityEngine;
 
-// ゲームの AssemblyScanner に「vanilla 互換フレームワーク」として認識させる
-[assembly: ComputerysModdingUtilities.StraftatMod(isVanillaCompatible: true)]
-
 namespace DANO
 {
     [BepInPlugin(LoaderInfo.GUID, LoaderInfo.Name, LoaderInfo.Version)]

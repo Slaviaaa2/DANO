@@ -11,7 +11,7 @@
 - **イベントシステム** — `EventBus.Subscribe<T>()` でキャンセル可能なゲームイベントを購読
 - **UI API** — ヒント表示、テキストラベル、プログレスバー、パネルなどの HUD 要素
 - **プレイヤー API** — プレイヤー情報への簡単なアクセス
-- **バニラ互換** — matchmaking pool に影響しない
+- **専用 matchmaking pool** — DANO 導入者同士でマッチング
 
 ## クイックスタート
 
@@ -26,8 +26,6 @@
 using DANO.API;
 using DANO.Events;
 using DANO.Plugin;
-
-[assembly: ComputerysModdingUtilities.StraftatMod(isVanillaCompatible: true)]
 
 [DANOPlugin("my-plugin", "1.0.0", "YourName", "プラグインの説明")]
 public class MyPlugin : Plugin<MyPlugin.MyConfig>
@@ -109,7 +107,9 @@ dotnet build DANO.Core/DANO.Core.csproj -c Debug
 dotnet build DANO.Template/DANO.Template.csproj -c Debug
 ```
 
-> **Note:** ビルドには `D:\RiderWorks\STRAFTAT_Libs\` 以下の参照 DLL が必要です。
+> **Note:** ビルドには参照 DLL が必要です。環境変数でパスを設定できます：
+> - `STRAFTAT_DIR` — ゲームルート（デフォルト: `D:\SteamLibrary\steamapps\common\STRAFTAT`）
+> - `STRAFTAT_LIBS` — 参照 DLL 置き場（デフォルト: `D:\RiderWorks\STRAFTAT_Libs`）
 
 ## ライセンス
 
