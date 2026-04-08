@@ -35,4 +35,16 @@ namespace DANO.Events
             WinningTeamId = winningTeamId;
         }
     }
+
+    /// <summary>スポーンフェーズ（ラウンド間のリスポーン待ち）が始まったときのイベント</summary>
+    public class SpawnPhaseStartedEvent
+    {
+        internal SpawnPhaseStartedEvent() { }
+    }
+
+    /// <summary>ゲームが開始されたときのイベント（ロビーからゲームへ遷移）</summary>
+    public class GameStartedEvent
+    {
+        internal GameStartedEvent() { }
+    }
 }

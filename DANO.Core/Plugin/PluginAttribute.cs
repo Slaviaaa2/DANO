@@ -18,6 +18,9 @@ namespace DANO.Plugin
         /// <summary>プラグインの説明</summary>
         public string Description { get; }
 
+        /// <summary>依存するプラグインのID一覧（先にロードされる）</summary>
+        public string[] Dependencies { get; set; } = Array.Empty<string>();
+
         public DANOPluginAttribute(
             string id,
             string version = "1.0.0",

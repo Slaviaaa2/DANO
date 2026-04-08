@@ -56,8 +56,11 @@ namespace DANO.Plugin
 
         // ────────── プラグイン開発者が使うメンバー ──────────
 
-        /// <summary>このプラグイン専用のロガー</summary>
+        /// <summary>このプラグイン専用のロガー（BepInEx ManualLogSource）</summary>
         protected ManualLogSource Log { get; private set; } = null!;
+
+        /// <summary>構造化ロガー（Debug/Info/Warning/Error メソッド付き）</summary>
+        protected DANOLogger Logger { get; private set; } = null!;
 
         /// <summary>
         /// 設定オブジェクト。
@@ -85,6 +88,7 @@ namespace DANO.Plugin
             Description = attr?.Description ?? "";
 
             Log = log;
+            Logger = new DANOLogger(log);
             Config = LoadOrCreateConfig(configPath);
 
             if (!Config.IsEnabled)

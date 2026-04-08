@@ -1,41 +1,64 @@
+using System.Reflection;
 using DANO.Events;
 using HarmonyLib;
 using UnityEngine;
 
 namespace DANO.Patches
 {
-    /// <summary>PlayerHealth.RemoveHealth をフックしてダメージイベントを発火する</summary>
-    [HarmonyPatch(typeof(PlayerHealth), nameof(PlayerHealth.RemoveHealth))]
-    internal static class RemoveHealthPatch
+    /// <summary>
+    /// PlayerHealth のダメージ/死亡パ��チ。
+    /// FishNet [ServerRpc] メソッドは Harmony パッチをバイパスするため、
+    /// 生成された RpcLogic___ メソッドを直接パッチする。
+    /// </summary>
+    internal static class PlayerHealthPatches
     {
-        // Prefixでキャンセル・値の変更が可能
-        private static bool Prefix(PlayerHealth __instance, ref float damage)
+        internal static void TryApply(Harmony harmony, BepInEx.Logging.ManualLogSource log)
         {
+            // RemoveHealth → RpcLogic___RemoveHealth_431000436
+            var removeHealthLogic = AccessTools.Method(typeof(PlayerHealth), "RpcLogic___RemoveHealth_431000436");
+            if (removeHealthLogic != null)
+            {
+                harmony.Patch(removeHealthLogic,
+                    prefix: new HarmonyMethod(typeof(PlayerHealthPatches), nameof(RemoveHealthPrefix)));
+                log.LogInfo("[DANOLoader] パッチ適用成功: PlayerHealth.RpcLogic___RemoveHealth (FishNet)");
+            }
+            else
+            {
+                log.LogWarning("[DANOLoader] PlayerHealth.RpcLogic___RemoveHealth が見つかりません");
+            }
+
+            // ChangeKilledState → RpcLogic___ChangeKilledState_1140765316
+            var changeKilledLogic = AccessTools.Method(typeof(PlayerHealth), "RpcLogic___ChangeKilledState_1140765316");
+            if (changeKilledLogic != null)
+            {
+                harmony.Patch(changeKilledLogic,
+                    prefix: new HarmonyMethod(typeof(PlayerHealthPatches), nameof(ChangeKilledStatePrefix)));
+                log.LogInfo("[DANOLoader] パッチ適用成功: PlayerHealth.RpcLogic___ChangeKilledState (FishNet)");
+            }
+            else
+            {
+                log.LogWarning("[DANOLoader] PlayerHealth.RpcLogic___ChangeKilledState が見つかりません");
+            }
+        }
+
+        private static bool RemoveHealthPrefix(PlayerHealth __instance, ref float damage)
+        {
+            DANOLoader.Log.LogInfo($"[RemoveHealthPatch] Prefix 発火！ damage={damage}");
             var ev = new PlayerDamagedEvent(__instance, damage, __instance.killer);
             EventBus.Raise(ev);
 
             if (ev.Cancel) return false;
-
             damage = ev.Damage;
             return true;
         }
-    }
 
-    /// <summary>PlayerHealth.ChangeKilledState をフックして死亡イベントを発火する</summary>
-    [HarmonyPatch(typeof(PlayerHealth), nameof(PlayerHealth.ChangeKilledState))]
-    internal static class ChangeKilledStatePatch
-    {
-        private static void Prefix(PlayerHealth __instance, bool tempBool)
+        private static void ChangeKilledStatePrefix(PlayerHealth __instance, bool tempBool)
         {
-            // trueになるとき＝死亡
             if (!tempBool) return;
-
-            // isKilledがすでにtrueなら二重発火しない
             if (__instance.isKilled) return;
 
-            // PlayerId は PlayerManager の ClientInstance から取る
-            var clientId = __instance.GetComponent<FishNet.Object.NetworkObject>()?.OwnerId ?? -1;
-            var ev = new PlayerDiedEvent(__instance, __instance.killer, clientId);
+            DANOLoader.Log.LogInfo("[ChangeKilledStatePatch] Prefix 発火！");
+            var ev = new PlayerDiedEvent(__instance, __instance.killer);
             EventBus.Raise(ev);
         }
     }

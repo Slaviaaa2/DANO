@@ -60,6 +60,10 @@
       <HintPath>$(StraftatLibs)\UnityEngine.IMGUIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(StraftatLibs)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Unity.TextMeshPro">
       <HintPath>$(StraftatLibs)\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
@@ -86,6 +90,20 @@
     <!-- ComputerysModdingUtilities -->
     <Reference Include="ComputerysModdingUtilities">
       <HintPath>$(StraftatLibs)\ComputerysModdingUtilities.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Steamworks / Heathen（チャットパッチ用） -->
+    <Reference Include="com.rlabrecque.steamworks.net">
+      <HintPath>$(StraftatLibs)\com.rlabrecque.steamworks.net.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Heathen.Steamworks">
+      <HintPath>$(StraftatLibs)\Heathen.Steamworks.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Heathen.Core">
+      <HintPath>$(StraftatLibs)\Heathen.Core.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

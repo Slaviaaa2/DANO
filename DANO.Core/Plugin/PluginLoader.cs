@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using BepInEx.Logging;
 
@@ -78,7 +79,9 @@ namespace DANO.Plugin
 
         internal static void EnableAll()
         {
-            foreach (var p in _pending)
+            var sorted = TopologicalSort(_pending);
+
+            foreach (var p in sorted)
             {
                 try
                 {
@@ -95,6 +98,67 @@ namespace DANO.Plugin
             }
             _pending.Clear();
             _loaderLog.LogInfo($"[PluginLoader] {_enabled.Count} 個のプラグインを有効化しました。");
+        }
+
+        /// <summary>Dependencies に基づいてトポロジカルソートする</summary>
+        private static List<PendingPlugin> TopologicalSort(List<PendingPlugin> plugins)
+        {
+            // ID → PendingPlugin のマップ
+            var byId = new Dictionary<string, PendingPlugin>(StringComparer.OrdinalIgnoreCase);
+            foreach (var p in plugins)
+            {
+                var attr = (DANOPluginAttribute?)Attribute.GetCustomAttribute(
+                    p.Plugin.GetType(), typeof(DANOPluginAttribute));
+                var id = attr?.Id ?? p.Plugin.GetType().Name;
+                byId[id] = p;
+            }
+
+            var result  = new List<PendingPlugin>();
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var visiting = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var id in byId.Keys.ToList())
+                Visit(id, byId, visited, visiting, result);
+
+            return result;
+        }
+
+        private static void Visit(
+            string id,
+            Dictionary<string, PendingPlugin> byId,
+            HashSet<string> visited,
+            HashSet<string> visiting,
+            List<PendingPlugin> result)
+        {
+            if (visited.Contains(id)) return;
+
+            if (visiting.Contains(id))
+            {
+                _loaderLog.LogWarning($"[PluginLoader] 循環依存を検出: {id}（スキップ）");
+                return;
+            }
+
+            if (!byId.TryGetValue(id, out var plugin)) return;
+
+            visiting.Add(id);
+
+            var attr = (DANOPluginAttribute?)Attribute.GetCustomAttribute(
+                plugin.Plugin.GetType(), typeof(DANOPluginAttribute));
+            var deps = attr?.Dependencies ?? Array.Empty<string>();
+
+            foreach (var dep in deps)
+            {
+                if (!byId.ContainsKey(dep))
+                {
+                    _loaderLog.LogWarning($"[PluginLoader] {id} の依存先 '{dep}' が見つかりません。");
+                    continue;
+                }
+                Visit(dep, byId, visited, visiting, result);
+            }
+
+            visiting.Remove(id);
+            visited.Add(id);
+            result.Add(plugin);
         }
 
         internal static void DisableAll()

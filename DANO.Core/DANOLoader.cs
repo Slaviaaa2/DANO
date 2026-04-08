@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using BepInEx;
 using BepInEx.Logging;
+using DANO.API;
 using DANO.Events;
 using DANO.Patches;
 using DANO.Plugin;
@@ -29,6 +30,7 @@ namespace DANO
             var gameRoot    = Path.GetDirectoryName(bepInExRoot)!;
 
             EventBus.Initialize(Log);
+            CommandManager.Initialize();
             DANOCanvas.GetOrCreate();
             HintController.GetOrCreate();
 
@@ -43,29 +45,115 @@ namespace DANO
             sentinel.hideFlags = HideFlags.HideAndDontSave;
             DontDestroyOnLoad(sentinel);
             sentinel.AddComponent<DANOSentinel>();
+            sentinel.AddComponent<ConnectionMonitor>();
 
             Log.LogInfo($"{LoaderInfo.Name} {LoaderInfo.Version} 起動完了。");
         }
 
         private void ApplyPatches()
         {
-            // イベントパッチ（非ライフサイクルメソッド — Harmony が確実に効く）
-            TryPatch(
-                AccessTools.Method(typeof(PlayerHealth), nameof(PlayerHealth.RemoveHealth)),
-                prefix: new HarmonyMethod(typeof(RemoveHealthPatch), "Prefix"),
-                name: "PlayerHealth.RemoveHealth");
-
-            TryPatch(
-                AccessTools.Method(typeof(PlayerHealth), nameof(PlayerHealth.ChangeKilledState)),
-                prefix: new HarmonyMethod(typeof(ChangeKilledStatePatch), "Prefix"),
-                name: "PlayerHealth.ChangeKilledState");
+            // PlayerHealth — FishNet [ServerRpc] メソッドは RpcLogic___ を直接パッチ
+            PlayerHealthPatches.TryApply(_harmony, Log);
 
             TryPatch(
                 AccessTools.Method(typeof(Gun), "Fire"),
                 prefix: new HarmonyMethod(typeof(GunFirePatch), "Prefix"),
                 name: "Gun.Fire");
 
+            TryPatch(
+                AccessTools.Method(typeof(PlayerManager), "SpawnPlayer",
+                    new[] { typeof(int), typeof(int), typeof(Vector3), typeof(Quaternion) }),
+                postfix: new HarmonyMethod(typeof(PlayerManagerPatch), "Postfix"),
+                name: "PlayerManager.SpawnPlayer");
+
+            TryPatch(
+                AccessTools.Method(typeof(SceneMotor), nameof(SceneMotor.ServerEndGameScene)),
+                prefix: new HarmonyMethod(typeof(SceneMotorPatch), "Prefix"),
+                name: "SceneMotor.ServerEndGameScene");
+
+            // チャットイベント（実際のチャットは LobbyChatUILogic 経由）
+            TryPatch(
+                AccessTools.Method(typeof(HeathenEngineering.DEMO.LobbyChatUILogic), "Start"),
+                postfix: new HarmonyMethod(typeof(ChatInitPatch), "Postfix"),
+                name: "LobbyChatUILogic.Start");
+
+            TryPatch(
+                AccessTools.Method(typeof(HeathenEngineering.DEMO.LobbyChatUILogic), "OnSendChatMessage"),
+                prefix: new HarmonyMethod(typeof(ChatSendPatch), "Prefix"),
+                name: "LobbyChatUILogic.OnSendChatMessage");
+
+            TryPatch(
+                AccessTools.Method(typeof(HeathenEngineering.DEMO.LobbyChatUILogic), "HandleChatMessage"),
+                prefix: new HarmonyMethod(typeof(ChatReceivePatch), "Prefix"),
+                name: "LobbyChatUILogic.HandleChatMessage");
+
+            // MatchChat.Update — / キーでコマンドプレフィックス自動入力
+            TryPatch(
+                AccessTools.Method(typeof(MatchChat), "Update"),
+                prefix: new HarmonyMethod(typeof(MatchChatPatch), "Prefix"),
+                name: "MatchChat.Update");
+
+            // ゲーム内チャット（ChatBroadcast — FishNet Broadcast 経由）
+            TryPatch(
+                AccessTools.Method(typeof(ChatBroadcast), "SendMessage"),
+                prefix: new HarmonyMethod(typeof(ChatBroadcastSendPatch), "Prefix"),
+                name: "ChatBroadcast.SendMessage");
+
+            TryPatch(
+                AccessTools.Method(typeof(ChatBroadcast), "OnMessageReceived"),
+                prefix: new HarmonyMethod(typeof(ChatBroadcastReceivePatch), "Prefix"),
+                name: "ChatBroadcast.OnMessageReceived");
+
+            // アイテムイベント
+            TryPatch(
+                AccessTools.Method(typeof(ItemBehaviour), nameof(ItemBehaviour.OnGrab)),
+                postfix: new HarmonyMethod(typeof(ItemGrabPatch), "Postfix"),
+                name: "ItemBehaviour.OnGrab");
+
+            TryPatch(
+                AccessTools.Method(typeof(ItemBehaviour), nameof(ItemBehaviour.OnDrop)),
+                prefix: new HarmonyMethod(typeof(ItemDropPatch), "Prefix"),
+                name: "ItemBehaviour.OnDrop");
+
+            // チーム変更イベント
+            TryPatch(
+                AccessTools.Method(typeof(ScoreManager), nameof(ScoreManager.SetTeamId)),
+                prefix: new HarmonyMethod(typeof(ScoreManagerPatch), "Prefix"),
+                postfix: new HarmonyMethod(typeof(ScoreManagerPatch), "Postfix"),
+                name: "ScoreManager.SetTeamId");
+
+            // 武器イベント
+            TryPatch(
+                AccessTools.Method(typeof(Weapon), nameof(Weapon.OnReload)),
+                postfix: new HarmonyMethod(typeof(WeaponReloadPatch), "Postfix"),
+                name: "Weapon.OnReload");
+
+            TryPatch(
+                AccessTools.Method(typeof(MeleeWeapon), nameof(MeleeWeapon.HitServer)),
+                prefix: new HarmonyMethod(typeof(MeleeHitPatch), "Prefix"),
+                name: "MeleeWeapon.HitServer");
+
+            // ドアイベント
+            TryPatch(
+                AccessTools.Method(typeof(Door), nameof(Door.OnInteract)),
+                prefix: new HarmonyMethod(typeof(DoorInteractPatch), "Prefix"),
+                name: "Door.OnInteract");
+
+            // ゲーム状態イベント
+            TryPatch(
+                AccessTools.Method(typeof(PauseManager), nameof(PauseManager.InvokeBeforeSpawn)),
+                postfix: new HarmonyMethod(typeof(SpawnPhasePatch), "Postfix"),
+                name: "PauseManager.InvokeBeforeSpawn");
+
+            TryPatch(
+                AccessTools.Method(typeof(GameManager), nameof(GameManager.StartGame)),
+                postfix: new HarmonyMethod(typeof(GameStartPatch), "Postfix"),
+                name: "GameManager.StartGame");
+
+            // FishNet ハッシュ名パッチ（バージョン依存）
             GameManagerPatch.TryApply(_harmony, Log);
+            ClientInstancePatch.TryApply(_harmony, Log);
+            GrenadePatch.TryApply(_harmony, Log);
         }
 
         private void TryPatch(
@@ -128,6 +216,6 @@ namespace DANO
     {
         public const string GUID    = "dev.slaviaaa.dano";
         public const string Name    = "DANO";
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
     }
 }
