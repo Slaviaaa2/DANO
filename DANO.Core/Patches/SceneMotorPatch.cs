@@ -12,8 +12,15 @@ namespace DANO.Patches
     [HarmonyPatch(typeof(SceneMotor), nameof(SceneMotor.ServerEndGameScene))]
     internal static class SceneMotorPatch
     {
+        private static bool _logged;
+
         private static void Prefix()
         {
+            if (!_logged)
+            {
+                _logged = true;
+                DANOLoader.Log.LogInfo("[SceneMotorPatch] Prefix 初回発火確認！");
+            }
             int winningTeamId = -1;
 
             var scoreManager = ScoreManager.Instance;

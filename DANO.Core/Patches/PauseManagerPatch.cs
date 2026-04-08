@@ -7,8 +7,15 @@ namespace DANO.Patches
     [HarmonyPatch(typeof(PauseManager), nameof(PauseManager.InvokeBeforeSpawn))]
     internal static class SpawnPhasePatch
     {
+        private static bool _logged;
+
         private static void Postfix()
         {
+            if (!_logged)
+            {
+                _logged = true;
+                DANOLoader.Log.LogInfo("[SpawnPhasePatch] Postfix 初回発火確認！");
+            }
             EventBus.Raise(new SpawnPhaseStartedEvent());
         }
     }

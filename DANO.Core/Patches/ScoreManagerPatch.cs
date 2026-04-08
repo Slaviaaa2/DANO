@@ -7,8 +7,15 @@ namespace DANO.Patches
     [HarmonyPatch(typeof(ScoreManager), nameof(ScoreManager.SetTeamId))]
     internal static class ScoreManagerPatch
     {
+        private static bool _logged;
+
         private static void Prefix(int playerId, int teamId, out int __state)
         {
+            if (!_logged)
+            {
+                _logged = true;
+                DANOLoader.Log.LogInfo("[ScoreManagerPatch] Prefix 初回発火確認！");
+            }
             // 変更前のチームIDを保存
             __state = -1;
             var scoreManager = ScoreManager.Instance;

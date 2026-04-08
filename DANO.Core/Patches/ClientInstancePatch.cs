@@ -10,6 +10,9 @@ namespace DANO.Patches
     /// <summary>
     /// ClientInstance の AddNewPlayer RPC をフックしてプレイヤー接続イベントを発火する。
     /// FishNet が生成するハッシュ付きメソッド名はバージョン間で変わる可能性がある。
+    ///
+    /// 注意: FishNet RPC メソッドは Harmony パッチが発火しない可能性が高い。
+    /// ConnectionMonitor のポーリングが接続/切断検出のフォールバックとして機能する。
     /// </summary>
     internal static class ClientInstancePatch
     {
@@ -28,7 +31,7 @@ namespace DANO.Patches
             {
                 harmony.Patch(method,
                     postfix: new HarmonyMethod(typeof(ClientInstancePatch), nameof(AddNewPlayerPostfix)));
-                log.LogDebug($"[ClientInstancePatch] パッチ適用: ClientInstance.{AddNewPlayerMethod}");
+                log.LogInfo($"[ClientInstancePatch] パッチ適用（FishNet RPC — 発火しない可能性あり）: ClientInstance.{AddNewPlayerMethod}");
             }
             catch (Exception ex)
             {
@@ -36,8 +39,16 @@ namespace DANO.Patches
             }
         }
 
+        private static bool _logged;
+
         private static void AddNewPlayerPostfix(NetworkConnection owner, NetworkObject newPlayer, int id, ulong steamID)
         {
+            if (!_logged)
+            {
+                _logged = true;
+                DANOLoader.Log.LogInfo("[ClientInstancePatch] AddNewPlayerPostfix 初回発火確認！（FishNet RPC パッチが動作した）");
+            }
+
             var client = newPlayer?.GetComponent<ClientInstance>();
             var playerName = client?.PlayerName ?? "";
 

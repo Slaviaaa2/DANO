@@ -7,12 +7,15 @@ using UnityEngine;
 namespace DANO.Patches
 {
     /// <summary>
-    /// PhysicsGrenade ���爆発をフックしてグレネードイベントを発火する。
+    /// PhysicsGrenade の爆発をフックしてグレネードイベントを発火する。
     /// FishNet ハッシュ名のため TryApply パターン。
+    ///
+    /// 注意: FishNet RPC メソッドは Harmony パッチが発火しない可能性が高い。
     /// </summary>
     internal static class GrenadePatch
     {
         private const string HandleExplosionMethod = "RpcLogic___HandleExplosion_4276783012";
+        private static bool _logged;
 
         internal static void TryApply(Harmony harmony, ManualLogSource log)
         {
@@ -27,7 +30,7 @@ namespace DANO.Patches
             {
                 harmony.Patch(method,
                     prefix: new HarmonyMethod(typeof(GrenadePatch), nameof(HandleExplosionPrefix)));
-                log.LogDebug($"[GrenadePatch] パッチ適用: PhysicsGrenade.{HandleExplosionMethod}");
+                log.LogInfo($"[GrenadePatch] パッチ適用（FishNet RPC — 発火しない可能性あり）: PhysicsGrenade.{HandleExplosionMethod}");
             }
             catch (Exception ex)
             {
@@ -37,6 +40,12 @@ namespace DANO.Patches
 
         private static void HandleExplosionPrefix(PhysicsGrenade __instance, Vector3 position)
         {
+            if (!_logged)
+            {
+                _logged = true;
+                DANOLoader.Log.LogInfo("[GrenadePatch] HandleExplosionPrefix 初回発火確認！（FishNet RPC パッチが動作した）");
+            }
+
             EventBus.Raise(new GrenadeExplodedEvent(
                 position,
                 __instance.explosionRadius,

@@ -12,8 +12,16 @@ namespace DANO.Patches
         typeof(int), typeof(int), typeof(Vector3), typeof(Quaternion))]
     internal static class PlayerManagerPatch
     {
+        private static bool _logged;
+
         private static void Postfix(PlayerManager __instance)
         {
+            if (!_logged)
+            {
+                _logged = true;
+                DANOLoader.Log.LogInfo("[PlayerManagerPatch] Postfix 初回発火確認！");
+            }
+
             var client = __instance.ClientScript;
             if (client == null) return;
 

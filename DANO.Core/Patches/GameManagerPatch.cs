@@ -8,6 +8,10 @@ namespace DANO.Patches
     /// <summary>
     /// FishNet が生成するハッシュ付きメソッド名はバージョン間で変わる可能性がある。
     /// PatchAll に含めず、存在確認してから手動適用する。
+    ///
+    /// 注意: FishNet [ObserversRpc]/[ServerRpc] メソッドは Harmony パッチが適用成功しても
+    /// 実行時に発火しない可能性が高い（PlayerHealth で確認済みのパターン）。
+    /// 将来的にはポーリング方式での代替を検討する。
     /// </summary>
     internal static class GameManagerPatch
     {
@@ -43,7 +47,7 @@ namespace DANO.Patches
             try
             {
                 harmony.Patch(method, prefix: prefix, postfix: postfix);
-                log.LogDebug($"[GameManagerPatch] パッチ適用: {targetType.Name}.{methodName}");
+                log.LogInfo($"[GameManagerPatch] パッチ適用（FishNet RPC — 発火しない可能性あり）: {targetType.Name}.{methodName}");
             }
             catch (Exception ex)
             {
@@ -51,14 +55,27 @@ namespace DANO.Patches
             }
         }
 
+        private static bool _roundSpawnLogged;
+        private static bool _endRoundLogged;
+
         private static void RoundSpawnPostfix()
         {
+            if (!_roundSpawnLogged)
+            {
+                _roundSpawnLogged = true;
+                DANOLoader.Log.LogInfo("[GameManagerPatch] RoundSpawnPostfix 初回発火確認！（FishNet RPC パッチが動作した）");
+            }
             var takeIndex = ScoreManager.Instance?.sync___get_value_TakeIndex() ?? 0;
             EventBus.Raise(new RoundStartedEvent(takeIndex));
         }
 
         private static void EndRoundPrefix(int winningTeamId)
         {
+            if (!_endRoundLogged)
+            {
+                _endRoundLogged = true;
+                DANOLoader.Log.LogInfo("[GameManagerPatch] EndRoundPrefix 初回発火確認！（FishNet RPC パッチが動作した）");
+            }
             EventBus.Raise(new RoundEndedEvent(winningTeamId, isDraw: false));
         }
     }

@@ -52,8 +52,10 @@ namespace DANO
 
         private void ApplyPatches()
         {
-            // PlayerHealth — FishNet [ServerRpc] メソッドは RpcLogic___ を直接パッチ
-            PlayerHealthPatches.TryApply(_harmony, Log);
+            // ── 注意 ──
+            // PlayerHealth.RemoveHealth / ChangeKilledState は FishNet [ServerRpc] のため
+            // Harmony パッチが適用成功しても実行時に発火しない（v0.2.6 で確認済み）。
+            // → ConnectionMonitor のヘルスポーリングで代替済み。パッチ登録は行わない。
 
             TryPatch(
                 AccessTools.Method(typeof(Gun), "Fire"),
@@ -71,11 +73,10 @@ namespace DANO
                 prefix: new HarmonyMethod(typeof(SceneMotorPatch), "Prefix"),
                 name: "SceneMotor.ServerEndGameScene");
 
-            // チャットイベント（実際のチャットは LobbyChatUILogic 経由）
-            TryPatch(
-                AccessTools.Method(typeof(HeathenEngineering.DEMO.LobbyChatUILogic), "Start"),
-                postfix: new HarmonyMethod(typeof(ChatInitPatch), "Postfix"),
-                name: "LobbyChatUILogic.Start");
+            // ── 注意 ──
+            // LobbyChatUILogic.Start は Unity ライフサイクルメソッドのため
+            // Harmony パッチが発火しない（v0.2.6 で確認済み）。
+            // → ConnectionMonitor が Traverse で直接 inputField をフック済み。
 
             TryPatch(
                 AccessTools.Method(typeof(HeathenEngineering.DEMO.LobbyChatUILogic), "OnSendChatMessage"),
@@ -87,11 +88,9 @@ namespace DANO
                 prefix: new HarmonyMethod(typeof(ChatReceivePatch), "Prefix"),
                 name: "LobbyChatUILogic.HandleChatMessage");
 
-            // MatchChat.Update — / キーでコマンドプレフィックス自動入力
-            TryPatch(
-                AccessTools.Method(typeof(MatchChat), "Update"),
-                prefix: new HarmonyMethod(typeof(MatchChatPatch), "Prefix"),
-                name: "MatchChat.Update");
+            // ── 注意 ──
+            // MatchChat.Update は Unity ライフサイクルメソッドのため発火しない可能性大。
+            // → ConnectionMonitor の onSubmit フックがコマンドインターセプトを担当。
 
             // ゲーム内チャット（ChatBroadcast — FishNet Broadcast 経由）
             TryPatch(
