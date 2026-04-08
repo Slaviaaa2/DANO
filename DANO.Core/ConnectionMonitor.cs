@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using DANO.API;
 using DANO.Events;
+using HeathenEngineering.SteamworksIntegration;
 using TMPro;
 using UnityEngine;
 using Input = UnityEngine.Input;
@@ -8,29 +9,82 @@ using Input = UnityEngine.Input;
 namespace DANO
 {
     /// <summary>
-    /// 毎フレーム更新される自前コンポーネント。
-    /// - F1 キーで DANO コンソール（チャット非依存コマンド入力）
-    /// - チャット入力フィールドへの onSubmit フック（Harmony 不要）
-    /// - プレイヤー切断ポーリング検出
+    /// 毎フレーム更新される中核モニタリングコンポーネント。
+    /// Harmony パッチは STRAFTAT では全て発火しないため、
+    /// 全イベント検出をポーリング/直接フック方式で行う。
+    ///
+    /// 担当:
+    /// - F1 コンソール（チャット非依存コマンド入力）
+    /// - チャット入力フィールドへの onSubmit 直接フック
+    /// - チャット受信の evtChatMsgReceived 直接フック
+    /// - プレイヤー接続/切断ポーリング
+    /// - ヘルス/死亡ポーリング
+    /// - アイテム拾得/投棄ポーリング
+    /// - 武器射撃/リロードポーリング
+    /// - ドア開閉ポーリング
+    /// - チーム変更ポーリング
+    /// - スポーン検出ポーリング
+    /// - ラウンド/ゲーム状態ポーリング
+    /// - グレネード爆発ポーリング
     /// - DanoTimer 駆動
     /// </summary>
     internal class ConnectionMonitor : MonoBehaviour
     {
         internal static ConnectionMonitor Instance { get; private set; }
 
-        private readonly Dictionary<int, string> _knownPlayers = new Dictionary<int, string>();
-
-        // F1 コンソール
-        private bool _consoleOpen;
-        private string _consoleInput = "";
-
-        // チャット入力フィールド直接フック
+        // ─── チャット入力フィールド直接フック ───
         private TMP_InputField _chatInputField;
         private bool _chatHooked;
 
-        // ヘルス変化ポーリング（FishNet RPC パッチが効かないため）
+        // ─── チャット受信直接フック ───
+        private bool _chatReceiveHooked;
+        private LobbyManager _lobbyManager;
+
+        // ─── F1 コンソール ───
+        private bool _consoleOpen;
+        private string _consoleInput = "";
+
+        // ─── オブジェクトキャッシュ（0.5 秒毎に更新） ───
+        private float _cacheTimer;
+        private PlayerHealth[] _healthCache = System.Array.Empty<PlayerHealth>();
+        private ItemBehaviour[] _itemCache = System.Array.Empty<ItemBehaviour>();
+        private Weapon[] _weaponCache = System.Array.Empty<Weapon>();
+        private Door[] _doorCache = System.Array.Empty<Door>();
+        private PhysicsGrenade[] _grenadeCache = System.Array.Empty<PhysicsGrenade>();
+
+        // ─── 接続モニタ ───
+        private readonly Dictionary<int, string> _knownPlayers = new Dictionary<int, string>();
+
+        // ─── ヘルスモニタ ───
         private readonly Dictionary<int, float> _lastHealth = new Dictionary<int, float>();
         private readonly Dictionary<int, bool> _lastKilled = new Dictionary<int, bool>();
+
+        // ─── アイテムモニタ ───
+        private readonly Dictionary<int, bool> _lastItemTaken = new Dictionary<int, bool>();
+        private readonly Dictionary<int, API.Player> _lastItemHolder = new Dictionary<int, API.Player>();
+
+        // ─── 武器モニタ ───
+        private readonly Dictionary<int, int> _lastAmmo = new Dictionary<int, int>();
+        private readonly Dictionary<int, bool> _lastReloading = new Dictionary<int, bool>();
+
+        // ─── ドアモニタ ───
+        private readonly Dictionary<int, bool> _lastDoorOpen = new Dictionary<int, bool>();
+
+        // ─── チームモニタ ───
+        private readonly Dictionary<int, int> _lastTeamId = new Dictionary<int, int>();
+
+        // ─── スポーンモニタ ───
+        private readonly HashSet<int> _lastAlivePlayers = new HashSet<int>();
+
+        // ─── ラウンド/ゲームモニタ ───
+        private int _lastTakeIndex = -1;
+        private bool _lastRoundWasWon;
+        private bool _lastGameStarted;
+        private bool _lastBetweenRounds;
+        private bool _lastInVictoryMenu;
+
+        // ─── グレネードモニタ ───
+        private readonly HashSet<int> _trackedGrenades = new HashSet<int>();
 
         private void Awake()
         {
@@ -41,25 +95,56 @@ namespace DANO
         {
             DanoTimer.Tick();
 
-            // F1 でコンソールトグル
-            if (Input.GetKeyDown(KeyCode.F1))
-            {
-                _consoleOpen = !_consoleOpen;
-            }
-
             // チャット入力フィールドの onSubmit に直接フック
-            // フック済みでもフィールドが破棄されていたら再フック
             if (!_chatHooked || _chatInputField == null)
             {
                 _chatHooked = false;
                 TryHookChatInput();
             }
 
+            // チャット受信の evtChatMsgReceived に直接フック
+            if (!_chatReceiveHooked)
+                TryHookChatReceive();
+
+            // F1 コンソール
+            if (Input.GetKeyDown(KeyCode.F1))
+                _consoleOpen = !_consoleOpen;
+
+            // オブジェクトキャッシュ更新
+            RefreshObjectCache();
+
+            // 各モニタ
             TickHealthMonitor();
             TickConnectionMonitor();
+            TickItemMonitor();
+            TickWeaponMonitor();
+            TickDoorMonitor();
+            TickTeamMonitor();
+            TickSpawnMonitor();
+            TickRoundMonitor();
+            TickGrenadeMonitor();
         }
 
-        // ─── チャット入力フィールド直接フック ───
+        // ═══════════════════════════════════════════════
+        //  オブジェクトキャッシュ
+        // ═══════════════════════════════════════════════
+
+        private void RefreshObjectCache()
+        {
+            _cacheTimer += Time.deltaTime;
+            if (_cacheTimer < 0.5f && _healthCache.Length > 0) return;
+            _cacheTimer = 0f;
+
+            _healthCache = Object.FindObjectsOfType<PlayerHealth>();
+            _itemCache = Object.FindObjectsOfType<ItemBehaviour>();
+            _weaponCache = Object.FindObjectsOfType<Weapon>();
+            _doorCache = Object.FindObjectsOfType<Door>();
+            _grenadeCache = Object.FindObjectsOfType<PhysicsGrenade>();
+        }
+
+        // ═══════════════════════════════════════════════
+        //  チャット入力フィールド直接フック
+        // ═══════════════════════════════════════════════
 
         private void TryHookChatInput()
         {
@@ -67,7 +152,6 @@ namespace DANO
             var lobbyChat = Object.FindObjectOfType<HeathenEngineering.DEMO.LobbyChatUILogic>();
             if (lobbyChat != null)
             {
-                // inputField は private なので Traverse で取得
                 var field = HarmonyLib.Traverse.Create(lobbyChat).Field("inputField").GetValue<TMP_InputField>();
                 if (field != null && field != _chatInputField)
                 {
@@ -79,7 +163,7 @@ namespace DANO
                 }
             }
 
-            // ゲーム内: ChatInputField2 (MatchChat / ChatBroadcast が使う)
+            // ゲーム内: ChatInputField2
             var chatObj = GameObject.Find("ChatInputField2");
             if (chatObj != null)
             {
@@ -101,16 +185,13 @@ namespace DANO
 
             DANOLoader.Log.LogInfo($"[DANO ChatHook] 入力: \"{text}\"");
 
-            // コマンドインターセプト
             if (text.StartsWith("/") && CommandManager.TryExecute(text))
             {
-                // テキストをクリア（次フレームで反映）
                 if (_chatInputField != null)
                     _chatInputField.text = "";
                 return;
             }
 
-            // チャット送信イベント
             var username = ClientInstance.Instance?.PlayerName ?? "";
             var ev = new ChatMessageSendingEvent(username, text);
             EventBus.Raise(ev);
@@ -121,7 +202,414 @@ namespace DANO
                 _chatInputField.text = ev.Message;
         }
 
-        // ─── シーン診断（/diag コマンドから呼ばれる） ───
+        // ═══════════════════════════════════════════════
+        //  チャット受信直接フック
+        // ═══════════════════════════════════════════════
+
+        private void TryHookChatReceive()
+        {
+            var lobbyChat = Object.FindObjectOfType<HeathenEngineering.DEMO.LobbyChatUILogic>();
+            if (lobbyChat == null) return;
+
+            var lm = HarmonyLib.Traverse.Create(lobbyChat).Field("lobbyManager").GetValue<LobbyManager>();
+            if (lm == null) return;
+
+            _lobbyManager = lm;
+            _lobbyManager.evtChatMsgReceived.AddListener(OnChatReceived);
+            _chatReceiveHooked = true;
+            DANOLoader.Log.LogInfo("[DANO] チャット受信 evtChatMsgReceived にフック完了");
+        }
+
+        private void OnChatReceived(LobbyChatMsg message)
+        {
+            var senderName = message.sender.Name ?? "";
+            var text = System.Text.Encoding.UTF8.GetString(message.data ?? System.Array.Empty<byte>());
+            EventBus.Raise(new ChatMessageReceivedEvent(senderName, text));
+        }
+
+        // ═══════════════════════════════════════════════
+        //  ヘルス/死亡ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickHealthMonitor()
+        {
+            foreach (var ph in _healthCache)
+            {
+                if (ph == null) continue;
+
+                int id = ph.GetInstanceID();
+                float currentHp = ph.health;
+                bool currentKilled = ph.isKilled;
+
+                // ダメージ検出
+                if (_lastHealth.TryGetValue(id, out float prevHp))
+                {
+                    if (currentHp < prevHp)
+                    {
+                        float damage = prevHp - currentHp;
+                        if (damage < 500f)
+                        {
+                            var ev = new PlayerDamagedEvent(ph, damage, ph.killer);
+                            EventBus.Raise(ev);
+
+                            // Cancel → HP を回復して巻き戻す
+                            if (ev.Cancel)
+                            {
+                                ph.health = prevHp;
+                                currentHp = prevHp;
+                            }
+                        }
+                    }
+                }
+                _lastHealth[id] = currentHp;
+
+                // 死亡検出
+                bool wasDead = _lastKilled.TryGetValue(id, out bool prevKilled) && prevKilled;
+                bool isDead = currentKilled || currentHp <= 0f;
+
+                if (isDead && !wasDead)
+                {
+                    EventBus.Raise(new PlayerDiedEvent(ph, ph.killer));
+                }
+                _lastKilled[id] = isDead;
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        //  接続/切断ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickConnectionMonitor()
+        {
+            var current = ClientInstance.playerInstances;
+            if (current == null) return;
+
+            // 新規接続検出
+            foreach (var kvp in current)
+            {
+                if (!_knownPlayers.ContainsKey(kvp.Key))
+                {
+                    var playerName = kvp.Value?.PlayerName ?? "";
+                    var steamId = kvp.Value != null
+                        ? (ulong)HarmonyLib.Traverse.Create(kvp.Value).Field("SteamID").GetValue<ulong>()
+                        : 0UL;
+                    _knownPlayers[kvp.Key] = playerName;
+                    EventBus.Raise(new PlayerConnectedEvent(kvp.Key, playerName, steamId));
+                }
+            }
+
+            // 切断検出
+            if (_knownPlayers.Count > current.Count)
+            {
+                var disconnected = new List<int>();
+                foreach (var kvp in _knownPlayers)
+                {
+                    if (!current.ContainsKey(kvp.Key))
+                        disconnected.Add(kvp.Key);
+                }
+
+                foreach (int playerId in disconnected)
+                {
+                    var playerName = _knownPlayers[playerId];
+                    _knownPlayers.Remove(playerId);
+                    API.Player.Invalidate(playerId);
+                    EventBus.Raise(new PlayerDisconnectedEvent(playerId, playerName));
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        //  アイテム拾得/投棄ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickItemMonitor()
+        {
+            foreach (var ib in _itemCache)
+            {
+                if (ib == null) continue;
+
+                int id = ib.GetInstanceID();
+                bool taken = ib.isTaken;
+
+                if (_lastItemTaken.TryGetValue(id, out bool wasTaken))
+                {
+                    if (taken && !wasTaken)
+                    {
+                        EventBus.Raise(new ItemPickedUpEvent(ib));
+                    }
+                    else if (!taken && wasTaken)
+                    {
+                        _lastItemHolder.TryGetValue(id, out var lastHolder);
+                        EventBus.Raise(new ItemDroppedEvent(ib, lastHolder));
+                    }
+                }
+
+                _lastItemTaken[id] = taken;
+                // Holder を記録（ドロップ後に参照できるように）
+                if (taken)
+                {
+                    var item = API.Item.Get(ib);
+                    var holder = item.Holder;
+                    if (holder != null)
+                        _lastItemHolder[id] = holder;
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        //  武器射撃/リロードポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickWeaponMonitor()
+        {
+            foreach (var weapon in _weaponCache)
+            {
+                if (weapon == null) continue;
+
+                int id = weapon.GetInstanceID();
+                int currentAmmo = weapon.currentAmmo;
+                bool isReloading = weapon.isReloading;
+
+                // 射撃検出（弾数減少）
+                if (_lastAmmo.TryGetValue(id, out int prevAmmo))
+                {
+                    if (currentAmmo < prevAmmo && !isReloading)
+                    {
+                        var ev = new WeaponFiredEvent(weapon);
+                        EventBus.Raise(ev);
+
+                        // Cancel → 弾を巻き戻す
+                        if (ev.Cancel)
+                        {
+                            weapon.currentAmmo = prevAmmo;
+                            currentAmmo = prevAmmo;
+                        }
+                    }
+                }
+                _lastAmmo[id] = currentAmmo;
+
+                // リロード検出（isReloading が false → true）
+                if (_lastReloading.TryGetValue(id, out bool wasReloading))
+                {
+                    if (isReloading && !wasReloading)
+                    {
+                        EventBus.Raise(new WeaponReloadEvent(weapon));
+                    }
+                }
+                _lastReloading[id] = isReloading;
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        //  ドア開閉ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickDoorMonitor()
+        {
+            foreach (var door in _doorCache)
+            {
+                if (door == null) continue;
+
+                int id = door.GetInstanceID();
+                bool isOpen = door.sync___get_value_isOpen();
+
+                if (_lastDoorOpen.TryGetValue(id, out bool wasOpen))
+                {
+                    if (isOpen != wasOpen)
+                    {
+                        var ev = new DoorInteractEvent(door, wasOpen);
+                        EventBus.Raise(ev);
+
+                        // Cancel → ドアを元に戻す
+                        if (ev.Cancel)
+                        {
+                            door.sync___set_value_isOpen(wasOpen, true);
+                            isOpen = wasOpen;
+                        }
+                    }
+                }
+                _lastDoorOpen[id] = isOpen;
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        //  チーム変更ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickTeamMonitor()
+        {
+            var sm = ScoreManager.Instance;
+            if (sm == null) return;
+
+            foreach (var kvp in sm.PlayerIdToTeamId)
+            {
+                int playerId = kvp.Key;
+                int teamId = kvp.Value;
+
+                if (_lastTeamId.TryGetValue(playerId, out int oldTeamId))
+                {
+                    if (teamId != oldTeamId)
+                    {
+                        EventBus.Raise(new TeamChangedEvent(playerId, oldTeamId, teamId));
+                    }
+                }
+                _lastTeamId[playerId] = teamId;
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        //  スポーン検出ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickSpawnMonitor()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+
+            var alive = gm.alivePlayers;
+            if (alive == null) return;
+
+            foreach (int playerId in alive)
+            {
+                if (!_lastAlivePlayers.Contains(playerId))
+                {
+                    EventBus.Raise(new PlayerSpawnedEvent(playerId));
+                }
+            }
+
+            _lastAlivePlayers.Clear();
+            foreach (int id in alive)
+                _lastAlivePlayers.Add(id);
+        }
+
+        // ═══════════════════════════════════════════════
+        //  ラウンド/ゲーム状態ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickRoundMonitor()
+        {
+            // ScoreManager — ラウンド開始（TakeIndex 変化）
+            var sm = ScoreManager.Instance;
+            if (sm != null)
+            {
+                int takeIndex = sm.sync___get_value_TakeIndex();
+                if (_lastTakeIndex >= 0 && takeIndex != _lastTakeIndex)
+                {
+                    EventBus.Raise(new RoundStartedEvent(takeIndex));
+                }
+                _lastTakeIndex = takeIndex;
+            }
+
+            // GameManager — ラウンド終了（roundWasWon 変化）
+            var gm = GameManager.Instance;
+            if (gm != null)
+            {
+                bool roundWon = gm.sync___get_value_roundWasWon();
+                if (roundWon && !_lastRoundWasWon)
+                {
+                    // 勝利チームを算出
+                    int winningTeamId = -1;
+                    if (sm != null)
+                    {
+                        int highestScore = -1;
+                        foreach (var kvp in sm.Points)
+                        {
+                            if (kvp.Value > highestScore)
+                            {
+                                highestScore = kvp.Value;
+                                winningTeamId = kvp.Key;
+                            }
+                        }
+                    }
+                    EventBus.Raise(new RoundEndedEvent(winningTeamId, isDraw: false));
+                }
+                _lastRoundWasWon = roundWon;
+            }
+
+            // PauseManager — ゲーム開始、スポーンフェーズ、マッチ終了
+            var pm = Object.FindObjectOfType<PauseManager>();
+            if (pm != null)
+            {
+                // ゲーム開始
+                bool gameStarted = pm.gameStarted;
+                if (gameStarted && !_lastGameStarted)
+                {
+                    EventBus.Raise(new GameStartedEvent());
+                }
+                _lastGameStarted = gameStarted;
+
+                // スポーンフェーズ
+                bool betweenRounds = PauseManager.BetweenRounds;
+                if (betweenRounds && !_lastBetweenRounds)
+                {
+                    EventBus.Raise(new SpawnPhaseStartedEvent());
+                }
+                _lastBetweenRounds = betweenRounds;
+
+                // マッチ終了（ビクトリー画面遷移）
+                bool inVictory = pm.inVictoryMenu;
+                if (inVictory && !_lastInVictoryMenu)
+                {
+                    int winningTeamId = -1;
+                    if (sm != null)
+                    {
+                        int highestScore = -1;
+                        foreach (var kvp in sm.Points)
+                        {
+                            if (kvp.Value > highestScore)
+                            {
+                                highestScore = kvp.Value;
+                                winningTeamId = kvp.Key;
+                            }
+                        }
+                    }
+                    EventBus.Raise(new MatchEndedEvent(winningTeamId));
+                }
+                _lastInVictoryMenu = inVictory;
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        //  グレネード爆発ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickGrenadeMonitor()
+        {
+            // 新しいグレネードを追跡開始
+            foreach (var grenade in _grenadeCache)
+            {
+                if (grenade == null) continue;
+                _trackedGrenades.Add(grenade.GetInstanceID());
+            }
+
+            // 現存する ID を収集
+            var currentIds = new HashSet<int>();
+            foreach (var grenade in _grenadeCache)
+            {
+                if (grenade == null) continue;
+
+                int id = grenade.GetInstanceID();
+                currentIds.Add(id);
+
+                // enabled が false になった = 爆発した
+                if (!grenade.enabled && _trackedGrenades.Contains(id))
+                {
+                    _trackedGrenades.Remove(id);
+                    EventBus.Raise(new GrenadeExplodedEvent(
+                        grenade.transform.position,
+                        grenade.explosionRadius,
+                        grenade.fragGrenade,
+                        grenade.stunGrenade));
+                }
+            }
+
+            // 破棄されたグレネード（キャッシュから消えた）を除去
+            _trackedGrenades.IntersectWith(currentIds);
+        }
+
+        // ═══════════════════════════════════════════════
+        //  シーン診断（/diag コマンドから呼ばれる）
+        // ═══════════════════════════════════════════════
 
         internal static void RunDiagnostics(CommandContext ctx)
         {
@@ -160,12 +648,20 @@ namespace DANO
             var pm = Object.FindObjectOfType<PauseManager>();
             Check("PauseManager", pm);
 
-            // チャットフック状態
+            var sm = ScoreManager.Instance;
+            Check("ScoreManager", sm);
+
+            // キャッシュ状態
             var inst = Instance;
+            lines.Add($"  ObjectCache: HP={inst?._healthCache.Length ?? 0}, Items={inst?._itemCache.Length ?? 0}, Weapons={inst?._weaponCache.Length ?? 0}, Doors={inst?._doorCache.Length ?? 0}");
+
+            // チャットフック状態
             var hookStatus = inst != null && inst._chatHooked ? "<color=#00FF00>hooked</color>" : "<color=#FF8800>not hooked</color>";
             var fieldStatus = inst?._chatInputField != null ? $" → {inst._chatInputField.gameObject.name}" : "";
             lines.Add($"  ChatHook: {hookStatus}{fieldStatus}");
-            DANOLoader.Log.LogInfo($"  ChatHook: {(inst != null && inst._chatHooked ? "hooked" : "not hooked")}{fieldStatus}");
+
+            var recvStatus = inst != null && inst._chatReceiveHooked ? "<color=#00FF00>hooked</color>" : "<color=#FF8800>not hooked</color>";
+            lines.Add($"  ChatReceiveHook: {recvStatus}");
 
             lines.Add("<color=#00FFFF>=== 診断完了 ===</color>");
             DANOLoader.Log.LogInfo("=== 診断完了 ===");
@@ -173,7 +669,9 @@ namespace DANO
             ctx.Reply(string.Join("\n", lines));
         }
 
-        // ─── F1 コンソール (OnGUI) ───
+        // ═══════════════════════════════════════════════
+        //  F1 コンソール (OnGUI)
+        // ═══════════════════════════════════════════════
 
         private void OnGUI()
         {
@@ -209,93 +707,6 @@ namespace DANO
 
             if (Event.current.isKey && Event.current.keyCode == KeyCode.Escape)
                 _consoleOpen = false;
-        }
-
-        // ─── ヘルス/死亡ポーリング検出 ───
-
-        private PlayerHealth[] _healthCache = System.Array.Empty<PlayerHealth>();
-        private float _healthCacheTimer;
-
-        private void TickHealthMonitor()
-        {
-            // PlayerHealth の検索は重いので0.5秒ごとにキャッシュ更新
-            _healthCacheTimer += Time.deltaTime;
-            if (_healthCacheTimer > 0.5f || _healthCache.Length == 0)
-            {
-                _healthCacheTimer = 0f;
-                _healthCache = Object.FindObjectsOfType<PlayerHealth>();
-            }
-
-            foreach (var ph in _healthCache)
-            {
-                if (ph == null) continue;
-
-                int id = ph.GetInstanceID();
-                float currentHp = ph.health;
-                bool currentKilled = ph.isKilled;
-
-                // ダメージ検出
-                if (_lastHealth.TryGetValue(id, out float prevHp))
-                {
-                    if (currentHp < prevHp)
-                    {
-                        float damage = prevHp - currentHp;
-
-                        // HP が大幅に下がった場合（-2000等）は死亡処理の一環なのでスキップ
-                        if (damage < 500f)
-                        {
-                            DANOLoader.Log.LogInfo($"[HealthMonitor] ダメージ検出: {prevHp} → {currentHp} (damage={damage})");
-                            var ev = new PlayerDamagedEvent(ph, damage, ph.killer);
-                            EventBus.Raise(ev);
-                        }
-                    }
-                }
-                _lastHealth[id] = currentHp;
-
-                // 死亡検出（isKilled フラグ or HP が 0 以下になった瞬間）
-                bool wasDead = _lastKilled.TryGetValue(id, out bool prevKilled) && prevKilled;
-                bool isDead = currentKilled || currentHp <= 0f;
-
-                if (isDead && !wasDead)
-                {
-                    DANOLoader.Log.LogInfo("[HealthMonitor] 死亡検出");
-                    var ev = new PlayerDiedEvent(ph, ph.killer);
-                    EventBus.Raise(ev);
-                }
-                _lastKilled[id] = isDead;
-            }
-        }
-
-        // ─── 切断検出 ───
-
-        private void TickConnectionMonitor()
-        {
-            var current = ClientInstance.playerInstances;
-            if (current == null) return;
-
-            foreach (var kvp in current)
-            {
-                if (!_knownPlayers.ContainsKey(kvp.Key))
-                    _knownPlayers[kvp.Key] = kvp.Value?.PlayerName ?? "";
-            }
-
-            if (_knownPlayers.Count > current.Count)
-            {
-                var disconnected = new List<int>();
-                foreach (var kvp in _knownPlayers)
-                {
-                    if (!current.ContainsKey(kvp.Key))
-                        disconnected.Add(kvp.Key);
-                }
-
-                foreach (int playerId in disconnected)
-                {
-                    var playerName = _knownPlayers[playerId];
-                    _knownPlayers.Remove(playerId);
-                    API.Player.Invalidate(playerId);
-                    EventBus.Raise(new PlayerDisconnectedEvent(playerId, playerName));
-                }
-            }
         }
     }
 }

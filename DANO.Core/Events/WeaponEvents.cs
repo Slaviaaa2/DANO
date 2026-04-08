@@ -14,19 +14,5 @@ namespace DANO.Events
         }
     }
 
-    /// <summary>近接武器がプレイヤーにヒットしたときのイベント</summary>
-    public class MeleeHitEvent
-    {
-        public API.Player? Attacker { get; }
-        public API.Player? Victim { get; }
-        public API.Item? Item { get; }
-
-        internal MeleeHitEvent(MeleeWeapon weapon, PlayerHealth enemyHealth)
-        {
-            var ib = weapon.GetComponent<ItemBehaviour>();
-            Item = ib != null ? API.Item.Get(ib) : null;
-            Attacker = API.Player.Local;
-            Victim = API.Player.FromHealth(enemyHealth);
-        }
-    }
+    // MeleeHitEvent は削除（ポーリングでの信頼性ある検出方法がないため）
 }

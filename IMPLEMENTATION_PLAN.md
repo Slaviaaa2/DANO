@@ -536,3 +536,90 @@ GameManagerPatch (RoundSpawn/EndRound), ClientInstancePatch, GrenadePatch
 各パッチの Prefix/Postfix に `_logged` フラグ付きの初回発火ログを追加。
 ゲーム起動後に BepInEx ログで「初回発火確認！」メッセージの有無を確認することで、
 どのパッチが実際に動作しているか判別可能。
+
+→ **結果: 全パッチが発火しないことを確認（通常メソッド含む）。v0.4.0 で Harmony 全廃へ。**
+
+---
+
+# v0.4.0 Harmony 全廃 — ポーリング/直接フック方式への全面切り替え [完了]
+
+## コンテキスト
+
+v0.3.0 のゲーム内テストで、Harmony パッチは STRAFTAT では**通常メソッドを含め全て実行時に発火しない**
+ことが確認された。パッチ「適用成功」と報告されるが、FishNet の IL 書き換えやゲーム側のアセンブリ処理が
+Harmony のトランポリンを無効化していると推定。
+
+一方、以下の方式は動作確認済み：
+- `TMP_InputField.onSubmit.AddListener` — 直接フック ✅
+- `FindObjectsOfType` + 状態ポーリング — HealthMonitor ✅
+- `ClientInstance.playerInstances` 比較 — ConnectionMonitor ✅
+
+**方針:** Harmony パッチを全て削除し、全イベント検出をポーリング/直接フックに切り替え。
+
+## 削除したファイル
+
+`Patches/` ディレクトリ全体（14ファイル）:
+ChatPatch.cs, ClientInstancePatch.cs, DoorPatch.cs, GameManagerPatch.cs,
+GameStartPatch.cs, GrenadePatch.cs, GunPatch.cs, ItemPatch.cs,
+PauseManagerPatch.cs, PlayerHealthPatch.cs, PlayerManagerPatch.cs,
+SceneMotorPatch.cs, ScoreManagerPatch.cs, WeaponPatch.cs
+
+## ConnectionMonitor — 中核コンポーネントに昇格
+
+全イベント検出を `ConnectionMonitor` のポーリング/直接フックに統合。
+
+### オブジェクトキャッシュ（0.5秒毎に一括更新）
+
+`FindObjectsOfType` は重いため、全型を 0.5 秒間隔でキャッシュ:
+PlayerHealth[], ItemBehaviour[], Weapon[], Door[], PhysicsGrenade[]
+
+### ポーリングモニタ一覧
+
+| モニタ | 監視対象 | 検出方法 |
+|--------|---------|---------|
+| TickHealthMonitor | `PlayerHealth.health`, `isKilled` | HP 減少 → ダメージ、isKilled/HP≤0 → 死亡 |
+| TickConnectionMonitor | `ClientInstance.playerInstances` | 新規 ID → 接続、消失 ID → 切断 |
+| TickItemMonitor | `ItemBehaviour.isTaken` | false→true → 拾得、true→false → 投棄 |
+| TickWeaponMonitor | `Weapon.currentAmmo`, `isReloading` | 弾数減少 → 射撃、isReloading 遷移 → リロード |
+| TickDoorMonitor | `Door.isOpen` (SyncVar) | 開閉状態変化 → ドア操作 |
+| TickTeamMonitor | `ScoreManager.PlayerIdToTeamId` | 値変化 → チーム変更 |
+| TickSpawnMonitor | `GameManager.alivePlayers` | 新規 ID → スポーン |
+| TickRoundMonitor | TakeIndex, roundWasWon, gameStarted 等 | 各状態の遷移を検出 |
+| TickGrenadeMonitor | `PhysicsGrenade.enabled` | enabled→false → 爆発 |
+
+### 直接フック
+
+| フック | 方式 |
+|--------|------|
+| チャット送信 | `TMP_InputField.onSubmit.AddListener` (既存) |
+| チャット受信 | `lobbyManager.evtChatMsgReceived.AddListener` (新規) |
+
+### Cancel（巻き戻し）方式
+
+ポーリングは事後検出のため、Cancel は「状態巻き戻し」で実現:
+
+| イベント | 巻き戻し処理 |
+|----------|-------------|
+| PlayerDamagedEvent | `ph.health = prevHp` で HP 回復 |
+| WeaponFiredEvent | `weapon.currentAmmo = prevAmmo` で弾数復元 |
+| DoorInteractEvent | `door.sync___set_value_isOpen(wasOpen, true)` で開閉復元 |
+| ChatMessageSendingEvent | `inputField.text = ""` でテキストクリア（直接フック） |
+
+### 削除したイベント
+
+| イベント | 理由 |
+|----------|------|
+| MeleeHitEvent | ヒット判定が瞬間的で状態が残らず、ポーリングでの信頼性ある検出方法がない |
+
+## 変更ファイル
+
+| ファイル | 変更内容 |
+|----------|---------|
+| `DANOLoader.cs` | ApplyPatches() 全削除、Harmony 使用削除、バージョン 0.4.0 |
+| `ConnectionMonitor.cs` | 全面書き換え: 9 つのポーリングモニタ + チャット受信フック |
+| `Events/PlayerEvents.cs` | WeaponFiredEvent コンストラクタ変更（ポーリング用）、Cancel→巻き戻し方式 |
+| `Events/DoorEvents.cs` | コンストラクタ変更（ポーリング用）、Cancel→巻き戻し方式 |
+| `Events/ItemEvents.cs` | コンストラクタ変更（ポーリング用） |
+| `Events/WeaponEvents.cs` | MeleeHitEvent 削除 |
+| `CLAUDE.md` | Harmony 不使用の注記、アーキテクチャ更新 |
+| `DANO.Template/MyPlugin.cs` | DoorInteractEvent.Player 参照修正 |

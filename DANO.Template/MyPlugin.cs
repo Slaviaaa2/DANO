@@ -111,7 +111,7 @@ namespace MyPlugin
         private void OnDoorInteract(DoorInteractEvent ev)
         {
             var action = ev.WasOpen ? "閉じた" : "開けた";
-            Logger.Debug($"{ev.Player?.Name ?? "?"} がドア {ev.Door.Name} を{action}");
+            Logger.Debug($"ドア {ev.Door.Name} を{action}");
         }
 
         private void OnGameStarted(GameStartedEvent ev)

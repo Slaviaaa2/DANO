@@ -9,7 +9,7 @@ EXILED (SCP:SL) に触発された、STRAFTAT 用の BepInEx 5 ベース MOD フ
 DANO.sln
 ├── DANO.Core/              ← フレームワーク本体（BepInEx プラグイン）
 │   ├── DANOLoader.cs           エントリーポイント（BepInPlugin）
-│   ├── ConnectionMonitor.cs    プレイヤー切断ポーリング検出
+│   ├── ConnectionMonitor.cs    全イベント検出の中核コンポーネント（ポーリング+直接フック）
 │   ├── API/                    公開 API（プラグイン開発者が直接使う全クラス）
 │   │   ├── Player.cs               プレイヤーラッパー（EXILED 風、アクションメソッド含む）
 │   │   ├── Item.cs                 アイテムラッパー（EXILED 風）
@@ -29,16 +29,15 @@ DANO.sln
 │   │   └── CommandContext.cs       コマンド実行コンテキスト
 │   ├── Events/                 イベントデータクラス + EventBus
 │   │   ├── EventBus.cs             イベントバス本体（優先度付き Subscribe）
-│   │   ├── PlayerEvents.cs         Spawned, Damaged, Died, WeaponFired
+│   │   ├── PlayerEvents.cs         Spawned, Damaged(Cancel→巻戻), Died, WeaponFired(Cancel→巻戻)
 │   │   ├── GameEvents.cs           RoundStarted, RoundEnded, MatchEnded
-│   │   ├── ChatEvents.cs           ChatMessageSending, ChatMessageReceived
+│   │   ├── ChatEvents.cs           ChatMessageSending(Cancel可), ChatMessageReceived
 │   │   ├── ConnectionEvents.cs     PlayerConnected, PlayerDisconnected
 │   │   ├── ItemEvents.cs           ItemPickedUp, ItemDropped
 │   │   ├── TeamEvents.cs           TeamChanged
-│   │   ├── WeaponEvents.cs         WeaponReload, MeleeHit
+│   │   ├── WeaponEvents.cs         WeaponReload
 │   │   ├── GrenadeEvents.cs        GrenadeExploded
-│   │   └── DoorEvents.cs           DoorInteract（Cancel可）
-│   ├── Patches/                Harmony パッチ（内部実装、プラグインに非公開）
+│   │   └── DoorEvents.cs           DoorInteract（Cancel→巻戻）
 │   ├── Plugin/                 プラグインシステム（Plugin<T>, Loader, Config, Attribute, Logger）
 │   └── UI/                     UI 内部実装（DANOCanvas, HintController, Elements/）
 └── DANO.Template/          ← プラグイン開発者向けテンプレート
@@ -54,7 +53,7 @@ DANO.sln
 | `API/` | `DANO.API` | **public** — プラグイン開発者が `using DANO.API;` で全 API にアクセス |
 | `Events/` | `DANO.Events` | **public** — イベントデータクラスと EventBus |
 | `Plugin/` | `DANO.Plugin` | **public** — `Plugin<T>`, `PluginConfig`, `DANOPluginAttribute` |
-| `Patches/` | `DANO.Patches` | **internal** — Harmony パッチ実装詳細。プラグインには非公開 |
+| ~~`Patches/`~~ | — | **削除済み** — Harmony は STRAFTAT で全パッチ発火しないため廃止 |
 | `UI/` | `DANO.UI` | **internal** — UI 内部実装。HudAPI 経由でのみ操作 |
 | ルート | `DANO` | DANOLoader, DANOSentinel, ConnectionMonitor 等 |
 
@@ -81,11 +80,11 @@ DANO.sln
 - Cancel 可能なイベントには `public bool Cancel { get; set; }` を持たせる
 - 値の書き換えが必要なプロパティ（`Damage` 等）は `{ get; set; }` にする
 
-### パッチ命名規則
+### イベント検出方式（v0.4.0 で Harmony 全廃）
 
-- ファイル名: `〇〇Patch.cs`（パッチ対象のクラス名ベース）
-- FishNet ハッシュ名パッチは `TryApply()` パターンで手動適用（`GameManagerPatch`, `ClientInstancePatch` 参照）
-- 通常メソッドパッチは `[HarmonyPatch]` 属性 + `DANOLoader.TryPatch()` で登録
+- **Harmony パッチは STRAFTAT では全て発火しない**（通常メソッド含む、v0.3.0 で確認）
+- 全イベント検出は `ConnectionMonitor` のポーリング/直接フックで行う
+- Cancel 可能なイベントは「状態巻き戻し」方式（HP 回復、弾数復元、ドア開閉復元）
 
 ### API クラスルール
 
@@ -117,7 +116,7 @@ dotnet build DANO.Template/DANO.Template.csproj -c Debug
 
 ## 技術スタック
 
-- **BepInEx 5.4.23.4** (Mono) / **HarmonyX** / **.NET Framework 4.7.2**
+- **BepInEx 5.4.23.4** (Mono) / **.NET Framework 4.7.2** — Harmony は使用しない（発火しないため）
 - **Unity 2021.3.45** / **FishNet** (ネットワーク) / **TextMeshPro** (UI テキスト)
 - **Newtonsoft.Json** (設定ファイル)
 - **ComputerysModdingUtilities** — DANO は非バニラ互換（専用 matchmaking pool）
@@ -129,15 +128,11 @@ STRAFTAT は BepInEx の管理 GameObject を破棄する。
 → `DANOLoader` 上の `Update()`, `StartCoroutine()`, `Start()` は**全て動かない**。
 → 自前の `[DANO]` GameObject (`HideFlags.HideAndDontSave` + `DontDestroyOnLoad`) に `DANOSentinel` コンポーネントを付けて回避。
 
-### Harmony と Unity ライフサイクルメソッド
-Unity の `Start()`, `Update()` 等は内部ネイティブキャッシュ経由で呼ばれるため、
-Harmony の Prefix/Postfix が**適用成功しても発火しない**場合がある。
-→ ライフサイクルメソッドのパッチは避ける。通常のゲームメソッド（`RemoveHealth`, `Fire` 等）は問題なく動く。
-
-### FishNet 生成メソッド名
-`RpcLogic___ObserversRoundSpawn_2166136261` のようなハッシュ付きメソッドは
-バージョン間で変わる可能性があるため、`AccessTools.Method` で存在確認してから手動適用する。
-→ `GameManagerPatch.TryApply()` 参照
+### Harmony は STRAFTAT で完全に動かない
+Harmony パッチは全て「適用成功」と報告されるが、**通常メソッド含め一切発火しない**（v0.3.0 で全パッチ検証済み）。
+FishNet の IL 書き換え、Unity ライフサイクルのネイティブキャッシュ、またはゲーム側のアセンブリ処理が原因と推定。
+→ 全イベント検出は `ConnectionMonitor` のポーリング/直接フック方式に切り替え済み（v0.4.0）。
+→ `Patches/` ディレクトリは削除済み。
 
 ### TMP リッチテキスト
 `<color=cyan>` のような名前付きカラーは TMP で動かない場合がある。
@@ -155,11 +150,10 @@ DANO.Core 内部では `API.Player`, `API.Item` とフル修飾すること。
    ├── EventBus.Initialize()
    ├── CommandManager.Initialize()
    ├── DANOCanvas / HintController 作成
-   ├── Harmony パッチ適用（個別 try-catch）
    ├── PluginLoader.ScanAndPrepare() — DANO/mods/ の DLL をスキャン、インスタンス化
    └── [DANO] GameObject 作成（HideFlags + DontDestroyOnLoad）
        ├── DANOSentinel — SteamLobby.Instance 検出 → TryEnableAll
-       └── ConnectionMonitor — プレイヤー切断ポーリング
+       └── ConnectionMonitor — 全イベント検出（ポーリング + 直接フック）
 
 2. DANOSentinel.Update() — SteamLobby.Instance をポーリング
    └── 検出 → PluginLoader.TryEnableAll()（Dependencies トポロジカルソート済み）

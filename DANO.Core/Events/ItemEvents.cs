@@ -6,14 +6,11 @@ namespace DANO.Events
         public API.Item Item { get; }
         /// <summary>拾ったプレイヤー</summary>
         public API.Player? Player { get; }
-        /// <summary>右手で拾ったかどうか</summary>
-        public bool RightHand { get; }
 
-        internal ItemPickedUpEvent(ItemBehaviour item, bool isOwner, bool rightHand)
+        internal ItemPickedUpEvent(ItemBehaviour item)
         {
             Item = API.Item.Get(item);
-            Player = isOwner ? API.Player.Local : Item.Holder;
-            RightHand = rightHand;
+            Player = Item.Holder;
         }
     }
 
@@ -21,13 +18,13 @@ namespace DANO.Events
     public class ItemDroppedEvent
     {
         public API.Item Item { get; }
-        /// <summary>落としたプレイヤー</summary>
+        /// <summary>落としたプレイヤー（ドロップ後は null になる可能性がある）</summary>
         public API.Player? Player { get; }
 
-        internal ItemDroppedEvent(ItemBehaviour item)
+        internal ItemDroppedEvent(ItemBehaviour item, API.Player? lastHolder)
         {
             Item = API.Item.Get(item);
-            Player = Item.Holder;
+            Player = lastHolder;
         }
     }
 }

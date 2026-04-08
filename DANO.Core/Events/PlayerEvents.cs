@@ -1,5 +1,3 @@
-using UnityEngine;
-
 namespace DANO.Events
 {
     /// <summary>プレイヤーがスポーンしたときのイベント</summary>
@@ -7,9 +5,9 @@ namespace DANO.Events
     {
         public API.Player Player { get; }
 
-        internal PlayerSpawnedEvent(ClientInstance player)
+        internal PlayerSpawnedEvent(int playerId)
         {
-            Player = API.Player.Get(player);
+            Player = API.Player.Get(playerId);
         }
     }
 
@@ -19,10 +17,10 @@ namespace DANO.Events
         public API.Player? Player { get; }
         public API.Player? Attacker { get; }
         public float Damage { get; set; }
-        /// <summary>trueにするとダメージをキャンセルできる</summary>
+        /// <summary>trueにするとダメージを巻き戻す（HP を回復する）</summary>
         public bool Cancel { get; set; }
 
-        internal PlayerDamagedEvent(PlayerHealth victim, float damage, Transform? killer)
+        internal PlayerDamagedEvent(PlayerHealth victim, float damage, UnityEngine.Transform? killer)
         {
             Player = API.Player.FromHealth(victim);
             Attacker = API.Player.FromTransform(killer);
@@ -36,7 +34,7 @@ namespace DANO.Events
         public API.Player? Player { get; }
         public API.Player? Attacker { get; }
 
-        internal PlayerDiedEvent(PlayerHealth victim, Transform? killer)
+        internal PlayerDiedEvent(PlayerHealth victim, UnityEngine.Transform? killer)
         {
             Player = API.Player.FromHealth(victim);
             Attacker = API.Player.FromTransform(killer);
@@ -48,14 +46,14 @@ namespace DANO.Events
     {
         public API.Item? Item { get; }
         public API.Player? Player { get; }
-        /// <summary>trueにすると発射をキャンセルできる</summary>
+        /// <summary>trueにすると弾数を巻き戻す</summary>
         public bool Cancel { get; set; }
 
-        internal WeaponFiredEvent(Gun gun, ClientInstance? owner)
+        internal WeaponFiredEvent(Weapon weapon)
         {
-            var ib = gun.GetComponent<ItemBehaviour>();
+            var ib = weapon.GetComponent<ItemBehaviour>();
             Item = ib != null ? API.Item.Get(ib) : null;
-            Player = owner != null ? API.Player.Get(owner) : null;
+            Player = API.Player.Local;
         }
     }
 }
