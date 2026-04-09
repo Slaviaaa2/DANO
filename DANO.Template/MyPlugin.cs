@@ -24,6 +24,8 @@ namespace MyPlugin
             EventBus.Subscribe<WeaponReloadEvent>(OnWeaponReload);
             EventBus.Subscribe<GrenadeExplodedEvent>(OnGrenadeExploded);
             EventBus.Subscribe<PlayerConnectedEvent>(OnPlayerConnected);
+            EventBus.Subscribe<WeaponFiredEvent>(OnWeaponFired);
+            EventBus.Subscribe<ItemDroppedEvent>(OnItemDropped);
             EventBus.Subscribe<DoorInteractEvent>(OnDoorInteract);
             EventBus.Subscribe<GameStartedEvent>(OnGameStarted);
 
@@ -36,6 +38,8 @@ namespace MyPlugin
             CommandManager.Register("scramble", OnScrambleCommand, "チームをシャッフル", hostOnly: true);
             CommandManager.Register("doors", OnDoorsCommand, "全ドアの状態を表示");
             CommandManager.Register("find", OnFindCommand, "名前でプレイヤーを検索");
+            CommandManager.Register("guntest", OnGunTestCommand, "持っている銃の内部状態をダンプ");
+            CommandManager.Register("eventtest", OnEventTestCommand, "全イベントの動作テスト");
 
             HudAPI.ShowHint($"<color=#00FFFF>{Config.WelcomeMessage}</color>", duration: 4f);
         }
@@ -49,6 +53,8 @@ namespace MyPlugin
             EventBus.Unsubscribe<WeaponReloadEvent>(OnWeaponReload);
             EventBus.Unsubscribe<GrenadeExplodedEvent>(OnGrenadeExploded);
             EventBus.Unsubscribe<PlayerConnectedEvent>(OnPlayerConnected);
+            EventBus.Unsubscribe<WeaponFiredEvent>(OnWeaponFired);
+            EventBus.Unsubscribe<ItemDroppedEvent>(OnItemDropped);
             EventBus.Unsubscribe<DoorInteractEvent>(OnDoorInteract);
             EventBus.Unsubscribe<GameStartedEvent>(OnGameStarted);
 
@@ -57,6 +63,8 @@ namespace MyPlugin
             CommandManager.Unregister("weapon");
             CommandManager.Unregister("tp");
             CommandManager.Unregister("freeze");
+            CommandManager.Unregister("guntest");
+            CommandManager.Unregister("eventtest");
             CommandManager.Unregister("scramble");
             CommandManager.Unregister("doors");
             CommandManager.Unregister("find");
@@ -90,11 +98,21 @@ namespace MyPlugin
             Logger.Info($"{ev.Player?.Name} が {ev.Item.Name} を拾った (弾数: {ev.Item.Ammo})");
         }
 
+        private void OnWeaponFired(WeaponFiredEvent ev)
+        {
+            Logger.Info($"{ev.Player?.Name} が {ev.Item?.Name} を発射！");
+        }
+
+        private void OnItemDropped(ItemDroppedEvent ev)
+        {
+            Logger.Info($"{ev.Player?.Name} が {ev.Item.Name} を捨てた");
+        }
+
         private void OnWeaponReload(WeaponReloadEvent ev)
         {
             var weapon = ev.Item?.Weapon;
             if (weapon == null) return;
-            Logger.Debug($"{ev.Player?.Name} が {weapon.Name} をリロード (弾数: {weapon.Ammo})");
+            Logger.Info($"{ev.Player?.Name} が {weapon.Name} をリロード (弾数: {weapon.Ammo})");
         }
 
         private void OnGrenadeExploded(GrenadeExplodedEvent ev)
@@ -236,6 +254,66 @@ namespace MyPlugin
             if (target == null) { ctx.Reply("見つかりませんでした。"); return; }
 
             ctx.Reply($"ID: {target.Id} | 名前: {target.Name} | HP: {target.Health}/{target.MaxHealth} | チーム: {target.TeamId}");
+        }
+
+        // ────────── テストコマンド ──────────
+
+        private void OnGunTestCommand(CommandContext ctx)
+        {
+            var player = ctx.Sender;
+            if (player == null) return;
+
+            var item = player.GetHeldItem();
+            if (item == null) { ctx.Reply("武器を持っていません。"); return; }
+
+            var w = item.Weapon;
+            if (w == null) { ctx.Reply($"持っているアイテム: {item.Name} (Weapon なし)"); return; }
+
+            ctx.Reply($"=== {w.Name} ===");
+            ctx.Reply($"IsGun={w.IsGun}, CanReload={w.CanReload}");
+            ctx.Reply($"Ammo(装填)={w.Ammo}, Reserve(予備)={w.ReserveAmmo}, ChargedBullets={w.ChargedBullets}");
+            ctx.Reply($"IsReloading={w.IsReloading}, NeedsAmmo={w.NeedsAmmo}");
+            ctx.Reply($"Damage={w.Damage:F1}, FireRate={w.FireRate:F2}");
+
+            // 弾数監視を開始（装填弾 + 予備弾の両方を監視）
+            int prevAmmo = w.Ammo;
+            float prevCharged = w.ChargedBullets;
+            int prevReserve = w.ReserveAmmo;
+            ctx.Reply($"[監視] 3秒間弾数を監視します。撃ってください！");
+            DanoTimer.Every(0.1f, () =>
+            {
+                int curAmmo = w.Ammo;
+                float curCharged = w.ChargedBullets;
+                int curReserve = w.ReserveAmmo;
+                if (curAmmo != prevAmmo || curCharged != prevCharged || curReserve != prevReserve)
+                {
+                    Logger.Info($"[guntest] 変化! Ammo:{prevAmmo}→{curAmmo}, Charged:{prevCharged}→{curCharged}, Reserve:{prevReserve}→{curReserve}");
+                    prevAmmo = curAmmo;
+                    prevCharged = curCharged;
+                    prevReserve = curReserve;
+                }
+            }, repeatCount: 30);
+        }
+
+        private void OnEventTestCommand(CommandContext ctx)
+        {
+            var player = ctx.Sender;
+            if (player == null) return;
+
+            ctx.Reply("=== イベントテスト開始 ===");
+
+            // 1. Damage + Heal テスト
+            float hpBefore = player.Health;
+            player.Damage(5f);
+            float hpAfterDmg = player.Health;
+            player.Heal(5f);
+            float hpAfterHeal = player.Health;
+            ctx.Reply($"[1] HP: {hpBefore} → Damage(5) → {hpAfterDmg} → Heal(5) → {hpAfterHeal}");
+
+            // 2. 武器詳細ダンプ（DANO.Core 内部の ConnectionMonitor.RunDiagnostics を呼ぶ）
+            ctx.Reply("[2] /diag コマンドで詳細診断を実行できます");
+
+            ctx.Reply("=== テスト完了 ===");
         }
 
         // ────────── 設定クラス ──────────

@@ -9,7 +9,7 @@ EXILED (SCP:SL) に触発された、STRAFTAT 用の BepInEx 5 ベース MOD フ
 DANO.sln
 ├── DANO.Core/              ← フレームワーク本体（BepInEx プラグイン）
 │   ├── DANOLoader.cs           エントリーポイント（BepInPlugin）
-│   ├── ConnectionMonitor.cs    全イベント検出の中核コンポーネント（ポーリング+直接フック）
+│   ├── ConnectionMonitor.cs    イベント検出の中核コンポーネント（ポーリング+直接フック、Harmony 併用）
 │   ├── API/                    公開 API（プラグイン開発者が直接使う全クラス）
 │   │   ├── Player.cs               プレイヤーラッパー（EXILED 風、アクションメソッド含む）
 │   │   ├── Item.cs                 アイテムラッパー（EXILED 風）
@@ -53,7 +53,7 @@ DANO.sln
 | `API/` | `DANO.API` | **public** — プラグイン開発者が `using DANO.API;` で全 API にアクセス |
 | `Events/` | `DANO.Events` | **public** — イベントデータクラスと EventBus |
 | `Plugin/` | `DANO.Plugin` | **public** — `Plugin<T>`, `PluginConfig`, `DANOPluginAttribute` |
-| ~~`Patches/`~~ | — | **削除済み** — Harmony は STRAFTAT で全パッチ発火しないため廃止 |
+| `Patches/` | `DANO.Patches` | **internal** — Harmony パッチ（PatchAll 方式で動作確認済み） |
 | `UI/` | `DANO.UI` | **internal** — UI 内部実装。HudAPI 経由でのみ操作 |
 | ルート | `DANO` | DANOLoader, DANOSentinel, ConnectionMonitor 等 |
 
@@ -80,11 +80,18 @@ DANO.sln
 - Cancel 可能なイベントには `public bool Cancel { get; set; }` を持たせる
 - 値の書き換えが必要なプロパティ（`Damage` 等）は `{ get; set; }` にする
 
-### イベント検出方式（v0.4.0 で Harmony 全廃）
+### イベント検出方式（v0.4.1 ハイブリッド方式）
 
-- **Harmony パッチは STRAFTAT では全て発火しない**（通常メソッド含む、v0.3.0 で確認）
-- 全イベント検出は `ConnectionMonitor` のポーリング/直接フックで行う
+- **Harmony PatchAll()** は `[HarmonyPatch]` 属性方式で動作する（v0.3.0 で失敗した手動 `harmony.Patch()` とは異なる）
+- **ServerRpc メソッド**（`PlayerHealth.RemoveHealth` 等）は FishNet が IL 書き換えするため Harmony パッチ不可 → ポーリングで検出
+- **private メソッド**（`Gun.Fire()` 等）は Mono JIT 最適化で発火しない場合あり → 上位の public/virtual メソッドをパッチ
 - Cancel 可能なイベントは「状態巻き戻し」方式（HP 回復、弾数復元、ドア開閉復元）
+
+| 検出方式 | 対象イベント |
+|----------|-------------|
+| Harmony パッチ | ItemPickedUp, ItemDropped, WeaponFired(Cancel可), WeaponReload, DoorInteract(Cancel可) |
+| ポーリング | PlayerDamaged(Cancel可), PlayerDied, PlayerSpawned, TeamChanged, RoundStarted/Ended, GameStarted, SpawnPhase, MatchEnded, GrenadeExploded, PlayerConnected/Disconnected |
+| 直接フック | ChatMessageSending(Cancel可), ChatMessageReceived |
 
 ### API クラスルール
 
@@ -116,7 +123,7 @@ dotnet build DANO.Template/DANO.Template.csproj -c Debug
 
 ## 技術スタック
 
-- **BepInEx 5.4.23.4** (Mono) / **.NET Framework 4.7.2** — Harmony は使用しない（発火しないため）
+- **BepInEx 5.4.23.4** (Mono) / **.NET Framework 4.7.2** — Harmony PatchAll() 方式で動作（手動 Patch() は不可）
 - **Unity 2021.3.45** / **FishNet** (ネットワーク) / **TextMeshPro** (UI テキスト)
 - **Newtonsoft.Json** (設定ファイル)
 - **ComputerysModdingUtilities** — DANO は非バニラ互換（専用 matchmaking pool）
@@ -128,11 +135,17 @@ STRAFTAT は BepInEx の管理 GameObject を破棄する。
 → `DANOLoader` 上の `Update()`, `StartCoroutine()`, `Start()` は**全て動かない**。
 → 自前の `[DANO]` GameObject (`HideFlags.HideAndDontSave` + `DontDestroyOnLoad`) に `DANOSentinel` コンポーネントを付けて回避。
 
-### Harmony は STRAFTAT で完全に動かない
-Harmony パッチは全て「適用成功」と報告されるが、**通常メソッド含め一切発火しない**（v0.3.0 で全パッチ検証済み）。
-FishNet の IL 書き換え、Unity ライフサイクルのネイティブキャッシュ、またはゲーム側のアセンブリ処理が原因と推定。
-→ 全イベント検出は `ConnectionMonitor` のポーリング/直接フック方式に切り替え済み（v0.4.0）。
-→ `Patches/` ディレクトリは削除済み。
+### Harmony の制約（STRAFTAT 固有）
+- **PatchAll() + `[HarmonyPatch]` 属性方式** → 動作する（v0.4.1 で確認）
+- **手動 `harmony.Patch()`** → v0.3.0 で全パッチ発火せず（原因不明、属性方式に統一）
+- **ServerRpc メソッド**（`PlayerHealth.RemoveHealth` 等）→ FishNet が IL 書き換えするため Harmony パッチ不可
+- **一部 private メソッド**（`Gun.Fire()` 等）→ Mono JIT 最適化（インライン化）で発火しない場合あり
+→ パッチ可能なメソッドは `Patches/HarmonyPatches.cs` で、不可能なものは `ConnectionMonitor` のポーリングで検出
+
+### STRAFTAT 武器クラス階層
+全 14 サブクラスが `Weapon` を直接継承（`Gun` からの継承ではない）:
+`Gun`, `Shotgun`, `Minigun`, `ChargeGun`, `BeamGun`, `LargeRaycastGun`, `DualLauncher`, `BumpGun`, `RepulsiveGun`, `Taser`, `MeleeWeapon`, `FlashLight`, `Propeller`, `WeaponHandSpawner`
+→ 武器パッチは `Weapon.WeaponUpdate()` をフックし、全サブクラスを一括検出する
 
 ### TMP リッチテキスト
 `<color=cyan>` のような名前付きカラーは TMP で動かない場合がある。

@@ -5,6 +5,7 @@ using DANO.API;
 using DANO.Events;
 using DANO.Plugin;
 using DANO.UI;
+using HarmonyLib;
 using UnityEngine;
 
 namespace DANO
@@ -29,8 +30,22 @@ namespace DANO
             DANOCanvas.GetOrCreate();
             HintController.GetOrCreate();
 
-            // Harmony は STRAFTAT では全パッチが実行時に発火しない（v0.3.0 で確認済み）。
-            // 全イベント検出は ConnectionMonitor のポーリング/直接フックで行う。
+            // Harmony PatchAll() 方式テスト（Genehmigt / Straftat_CMR と同パターン）
+            try
+            {
+                var harmony = new Harmony(LoaderInfo.GUID);
+                harmony.PatchAll();
+                var count = 0;
+                foreach (var _ in harmony.GetPatchedMethods()) count++;
+                Log.LogInfo($"[Harmony] PatchAll() 完了 — パッチ済みメソッド数: {count}");
+                foreach (var method in harmony.GetPatchedMethods())
+                    Log.LogInfo($"[Harmony]   patched: {method.DeclaringType?.Name}.{method.Name}");
+
+            }
+            catch (System.Exception ex)
+            {
+                Log.LogError($"[Harmony] PatchAll() 失敗: {ex}");
+            }
 
             PluginLoader.ScanAndPrepare(gameRoot, Log);
 

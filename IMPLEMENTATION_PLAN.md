@@ -623,3 +623,39 @@ PlayerHealth[], ItemBehaviour[], Weapon[], Door[], PhysicsGrenade[]
 | `Events/WeaponEvents.cs` | MeleeHitEvent 削除 |
 | `CLAUDE.md` | Harmony 不使用の注記、アーキテクチャ更新 |
 | `DANO.Template/MyPlugin.cs` | DoorInteractEvent.Player 参照修正 |
+
+---
+
+# v0.4.1 Harmony 再有効化（ハイブリッド方式） [完了]
+
+## コンテキスト
+
+v0.4.0 で Harmony を全廃したが、他の MOD（Genehmigt 等）が PatchAll() + `[HarmonyPatch]` 属性方式で正常動作していることを発見。
+v0.3.0 で失敗したのは手動 `harmony.Patch()` 方式のみで、属性方式は問題なかった。
+
+## 判明した制約
+
+- **PatchAll() + 属性方式** → 動作する
+- **手動 harmony.Patch()** → 発火しない（v0.3.0 で確認済み）
+- **ServerRpc メソッド** → FishNet IL 書き換えで Harmony 不可（ポーリング維持）
+- **private メソッド**（Gun.Fire 等）→ Mono JIT 最適化で発火しない場合あり
+- **ServerRpc(RunLocally=true)** → 状態変更は Update() 後に反映（同フレーム比較不可、フレーム間比較必要）
+
+## 武器クラス階層の発見
+
+全 14 サブクラスが `Weapon` を直接継承（`Gun` からの派生ではない）:
+`Gun`, `Shotgun`, `Minigun`, `ChargeGun`, `BeamGun`, `LargeRaycastGun`, `DualLauncher`, `BumpGun`, `RepulsiveGun`, `Taser`, `MeleeWeapon`, `FlashLight`, `Propeller`, `WeaponHandSpawner`
+
+→ `Gun.Update()` パッチでは Gun のみ検出、他のサブクラス（Shotgun 等）は漏れる
+→ `Weapon.WeaponUpdate()` をパッチして全サブクラスを一括検出
+
+## 変更内容
+
+| ファイル | 変更内容 |
+|----------|---------|
+| `DANOLoader.cs` | Harmony PatchAll() 追加、診断ログ |
+| `Patches/HarmonyPatches.cs` | 新規: ItemOnGrab/OnDrop, WeaponUpdate(射撃+リロード), DoorInteract パッチ |
+| `ConnectionMonitor.cs` | アイテム/武器/ドアのポーリング無効化（Harmony に移行）、コメント更新 |
+| `API/DanoWeapon.cs` | IsFirearm, WeaponType, ReserveAmmo, ChargedBullets 追加、Ammo を reloadWeapon 対応 |
+| `DANO.Template/MyPlugin.cs` | WeaponFired/ItemDropped イベント、/guntest /eventtest コマンド追加 |
+| `CLAUDE.md` | ハイブリッド方式、武器階層、Harmony 制約を文書化 |

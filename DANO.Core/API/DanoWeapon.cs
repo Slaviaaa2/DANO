@@ -34,16 +34,36 @@ namespace DANO.API
         /// <summary>武器名（ItemBehaviour.weaponName 経由）</summary>
         public string Name => Base.behaviour?.weaponName ?? "";
 
-        /// <summary>銃器かどうか (Gun 派生)</summary>
-        public bool IsGun => Base is Gun;
+        /// <summary>銃器かどうか（弾薬を使う全武器タイプ: Gun, Shotgun, Minigun, ChargeGun 等）</summary>
+        public bool IsFirearm => Base.needsAmmo && !(Base is MeleeWeapon);
 
         /// <summary>近接武器かどうか (MeleeWeapon 派生)</summary>
         public bool IsMelee => Base is MeleeWeapon;
 
+        /// <summary>武器の具体的な型名（Gun, Shotgun, Minigun, ChargeGun, BeamGun, MeleeWeapon 等）</summary>
+        public string WeaponType => Base.GetType().Name;
+
+        // 後方互換: IsGun は IsFirearm のエイリアス
+        /// <summary>銃器かどうか（IsFirearm と同義）</summary>
+        public bool IsGun => IsFirearm;
+
         // ─── 弾薬 ───
 
-        /// <summary>現在の弾数（読み書き可）</summary>
+        /// <summary>現在の弾数（読み書き可）。非 reload 武器は currentAmmo、reload 武器は chargedBullets。</summary>
         public int Ammo
+        {
+            get => Base.reloadWeapon ? (int)Base.chargedBullets : Base.currentAmmo;
+            set
+            {
+                if (Base.reloadWeapon)
+                    Base.chargedBullets = value;
+                else
+                    Base.currentAmmo = value;
+            }
+        }
+
+        /// <summary>予備弾数（reload 武器のみ意味がある）</summary>
+        public int ReserveAmmo
         {
             get => Base.currentAmmo;
             set => Base.currentAmmo = value;
@@ -54,6 +74,13 @@ namespace DANO.API
 
         /// <summary>リロード中かどうか</summary>
         public bool IsReloading => Base.isReloading;
+
+        /// <summary>装填済み弾数（reload 武器のマガジン内弾数）</summary>
+        public float ChargedBullets
+        {
+            get => Base.chargedBullets;
+            set => Base.chargedBullets = value;
+        }
 
         /// <summary>リロード可能な武器かどうか</summary>
         public bool CanReload => Base.reloadWeapon;

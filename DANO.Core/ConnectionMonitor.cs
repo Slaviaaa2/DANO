@@ -10,18 +10,19 @@ namespace DANO
 {
     /// <summary>
     /// 毎フレーム更新される中核モニタリングコンポーネント。
-    /// Harmony パッチは STRAFTAT では全て発火しないため、
-    /// 全イベント検出をポーリング/直接フック方式で行う。
+    /// Harmony PatchAll() + ポーリング/直接フックのハイブリッド方式でイベント検出を行う。
     ///
-    /// 担当:
+    /// Harmony パッチ（HarmonyPatches.cs）:
+    /// - アイテム拾得/投棄: ItemBehaviour.OnGrab / OnDrop
+    /// - 武器射撃/リロード: Weapon.WeaponUpdate (全サブクラス対応)
+    /// - ドア開閉: Door.OnInteract (Cancel 可)
+    ///
+    /// ポーリング/直接フック（本クラス）:
     /// - F1 コンソール（チャット非依存コマンド入力）
     /// - チャット入力フィールドへの onSubmit 直接フック
     /// - チャット受信の evtChatMsgReceived 直接フック
     /// - プレイヤー接続/切断ポーリング
-    /// - ヘルス/死亡ポーリング
-    /// - アイテム拾得/投棄ポーリング
-    /// - 武器射撃/リロードポーリング
-    /// - ドア開閉ポーリング
+    /// - ヘルス/死亡ポーリング（ServerRpc のため Harmony 不可）
     /// - チーム変更ポーリング
     /// - スポーン検出ポーリング
     /// - ラウンド/ゲーム状態ポーリング
@@ -85,6 +86,7 @@ namespace DANO
 
         // ─── グレネードモニタ ───
         private readonly HashSet<int> _trackedGrenades = new HashSet<int>();
+        private readonly HashSet<int> _explodedGrenades = new HashSet<int>();
 
         private void Awake()
         {
@@ -113,12 +115,12 @@ namespace DANO
             // オブジェクトキャッシュ更新
             RefreshObjectCache();
 
-            // 各モニタ
+            // 各モニタ（アイテム/武器/ドアは Harmony パッチに移行済み）
             TickHealthMonitor();
             TickConnectionMonitor();
-            TickItemMonitor();
-            TickWeaponMonitor();
-            TickDoorMonitor();
+            // TickItemMonitor();   — Harmony: ItemOnGrabPatch / ItemOnDropPatch
+            // TickWeaponMonitor(); — Harmony: GunUpdatePatch
+            // TickDoorMonitor();   — Harmony: DoorInteractPatch
             TickTeamMonitor();
             TickSpawnMonitor();
             TickRoundMonitor();
@@ -575,15 +577,8 @@ namespace DANO
 
         private void TickGrenadeMonitor()
         {
-            // 新しいグレネードを追跡開始
-            foreach (var grenade in _grenadeCache)
-            {
-                if (grenade == null) continue;
-                _trackedGrenades.Add(grenade.GetInstanceID());
-            }
-
-            // 現存する ID を収集
             var currentIds = new HashSet<int>();
+
             foreach (var grenade in _grenadeCache)
             {
                 if (grenade == null) continue;
@@ -591,9 +586,16 @@ namespace DANO
                 int id = grenade.GetInstanceID();
                 currentIds.Add(id);
 
-                // enabled が false になった = 爆発した
-                if (!grenade.enabled && _trackedGrenades.Contains(id))
+                if (grenade.enabled)
                 {
+                    // アクティブなグレネードを追跡
+                    _trackedGrenades.Add(id);
+                    _explodedGrenades.Remove(id);
+                }
+                else if (_trackedGrenades.Contains(id) && !_explodedGrenades.Contains(id))
+                {
+                    // enabled が false になった = 爆発した（一度だけ発火）
+                    _explodedGrenades.Add(id);
                     _trackedGrenades.Remove(id);
                     EventBus.Raise(new GrenadeExplodedEvent(
                         grenade.transform.position,
@@ -603,8 +605,9 @@ namespace DANO
                 }
             }
 
-            // 破棄されたグレネード（キャッシュから消えた）を除去
+            // 破棄されたグレネードを除去
             _trackedGrenades.IntersectWith(currentIds);
+            _explodedGrenades.IntersectWith(currentIds);
         }
 
         // ═══════════════════════════════════════════════
