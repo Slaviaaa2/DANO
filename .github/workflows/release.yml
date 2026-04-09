@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify DLL exists
+        run: |
+          if [ ! -f dist/DANO.Core.dll ]; then
+            echo "::error::dist/DANO.Core.dll not found. Build locally and commit before tagging."
+            exit 1
+          fi
+
+      - name: Package release
+        run: |
+          cd dist
+          zip ../DANO-${{ steps.version.outputs.version }}.zip DANO.Core.dll
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git tag --sort=-creatordate | sed -n '2p')
+          if [ -n "$PREV_TAG" ]; then
+            NOTES=$(git log --pretty=format:"- %s" "$PREV_TAG"..HEAD -- ':!dist/')
+          else
+            NOTES=$(git log --pretty=format:"- %s" -- ':!dist/')
+          fi
+          # Write to file for multiline support
+          echo "$NOTES" > release_notes.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: DANO v${{ steps.version.outputs.version }}
+          body_path: release_notes.txt
+          files: DANO-${{ steps.version.outputs.version }}.zip
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
