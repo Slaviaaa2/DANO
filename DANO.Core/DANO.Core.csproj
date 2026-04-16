@@ -9,6 +9,17 @@
     <LangVersion>latest</LangVersion>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+
+    <!-- NuGet パッケージメタデータ -->
+    <PackageId>DANO.Core</PackageId>
+    <PackageVersion>0.5.0</PackageVersion>
+    <Authors>Slaviaaa2</Authors>
+    <Description>EXILED-inspired BepInEx 5 mod framework for STRAFTAT. Provides event system, player/item/weapon wrappers, chat commands, HUD API, and plugin lifecycle management.</Description>
+    <PackageTags>straftat;bepinex;modding;unity</PackageTags>
+    <PackageProjectUrl>https://github.com/Slaviaaa2/DANO</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Slaviaaa2/DANO</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <!-- 環境変数 or デフォルトパス -->

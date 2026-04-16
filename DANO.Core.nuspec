@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>DANO.Core</id>
+    <version>$version$</version>
+    <authors>Slaviaaa2</authors>
+    <description>EXILED-inspired BepInEx 5 mod framework for STRAFTAT. Provides event system, player/item/weapon wrappers, chat commands, HUD API, and plugin lifecycle management.</description>
+    <tags>straftat bepinex modding unity</tags>
+    <projectUrl>https://github.com/Slaviaaa2/DANO</projectUrl>
+    <repository type="git" url="https://github.com/Slaviaaa2/DANO" />
+    <license type="expression">MIT</license>
+    <readme>docs/README.md</readme>
+  </metadata>
+  <files>
+    <!-- Pre-built DLL -->
+    <file src="dist/DANO.Core.dll" target="lib/net472/" />
+    <!-- README for NuGet.org display -->
+    <file src="README.md" target="docs/" />
+  </files>
+</package>

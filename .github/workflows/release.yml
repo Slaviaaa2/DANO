@@ -15,6 +15,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
@@ -26,23 +34,34 @@ jobs:
             exit 1
           fi
 
-      - name: Package release
+      - name: Package release zip
         run: |
           cd dist
           zip ../DANO-${{ steps.version.outputs.version }}.zip DANO.Core.dll
           cp ../DANO-${{ steps.version.outputs.version }}.zip ../DANO.zip
 
+      - name: Pack NuGet package
+        run: |
+          nuget pack DANO.Core.nuspec \
+            -Version ${{ steps.version.outputs.version }} \
+            -OutputDirectory ./nupkg
+
+      - name: Push to NuGet.org
+        run: |
+          dotnet nuget push ./nupkg/*.nupkg \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
       - name: Generate release notes
         id: notes
         run: |
-          # Get previous tag
           PREV_TAG=$(git tag --sort=-creatordate | sed -n '2p')
           if [ -n "$PREV_TAG" ]; then
             NOTES=$(git log --pretty=format:"- %s" "$PREV_TAG"..HEAD -- ':!dist/')
           else
             NOTES=$(git log --pretty=format:"- %s" -- ':!dist/')
           fi
-          # Write to file for multiline support
           echo "$NOTES" > release_notes.txt
 
       - name: Create GitHub Release
@@ -53,5 +72,6 @@ jobs:
           files: |
             DANO-${{ steps.version.outputs.version }}.zip
             DANO.zip
+            nupkg/*.nupkg
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}

@@ -88,6 +88,24 @@ namespace DANO
         private readonly HashSet<int> _trackedGrenades = new HashSet<int>();
         private readonly HashSet<int> _explodedGrenades = new HashSet<int>();
 
+        // ─── 移動状態モニタ ───
+        private readonly Dictionary<int, bool> _lastSprinting = new Dictionary<int, bool>();
+        private readonly Dictionary<int, bool> _lastCrouching = new Dictionary<int, bool>();
+        private readonly Dictionary<int, bool> _lastSliding = new Dictionary<int, bool>();
+        private readonly Dictionary<int, bool> _lastGrounded = new Dictionary<int, bool>();
+        private readonly Dictionary<int, bool> _lastLeaning = new Dictionary<int, bool>();
+        private readonly Dictionary<int, bool> _lastAiming = new Dictionary<int, bool>();
+
+        // ─── マップモニタ ───
+        private string _lastMapName = "";
+
+        // ─── スコアモニタ ───
+        private readonly Dictionary<int, int> _lastMatchScore = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> _lastRoundScore = new Dictionary<int, int>();
+
+        // ─── ポーズモニタ ───
+        private bool _lastPaused;
+
         private void Awake()
         {
             Instance = this;
@@ -125,6 +143,10 @@ namespace DANO
             TickSpawnMonitor();
             TickRoundMonitor();
             TickGrenadeMonitor();
+            TickMovementMonitor();
+            TickMapMonitor();
+            TickScoreMonitor();
+            TickPauseMonitor();
         }
 
         // ═══════════════════════════════════════════════
@@ -608,6 +630,123 @@ namespace DANO
             // 破棄されたグレネードを除去
             _trackedGrenades.IntersectWith(currentIds);
             _explodedGrenades.IntersectWith(currentIds);
+        }
+
+        // ═══════════════════════════════════════════════
+        //  移動状態ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickMovementMonitor()
+        {
+            foreach (var ph in _healthCache)
+            {
+                if (ph == null) continue;
+                var fpc = ph.GetComponent<FirstPersonController>();
+                if (fpc == null) continue;
+
+                int id = ph.GetInstanceID();
+                var player = API.Player.FromHealth(ph);
+                if (player == null) continue;
+
+                CheckMovementState(id, player, fpc.isSprinting, _lastSprinting,
+                    (p, v) => EventBus.Raise(new PlayerSprintChangedEvent(p, v)));
+                CheckMovementState(id, player, fpc.isCrouching, _lastCrouching,
+                    (p, v) => EventBus.Raise(new PlayerCrouchChangedEvent(p, v)));
+                CheckMovementState(id, player, fpc.isSliding, _lastSliding,
+                    (p, v) => EventBus.Raise(new PlayerSlideChangedEvent(p, v)));
+                CheckMovementState(id, player, fpc.isGrounded, _lastGrounded,
+                    (p, v) => EventBus.Raise(new PlayerGroundedChangedEvent(p, v)));
+                CheckMovementState(id, player, fpc.isLeaning, _lastLeaning,
+                    (p, v) => EventBus.Raise(new PlayerLeanChangedEvent(p, v)));
+                CheckMovementState(id, player, fpc.isAiming, _lastAiming,
+                    (p, v) => EventBus.Raise(new PlayerAimChangedEvent(p, v)));
+            }
+        }
+
+        private static void CheckMovementState(int id, API.Player player, bool current,
+            Dictionary<int, bool> lastState, System.Action<API.Player, bool> raiseEvent)
+        {
+            if (lastState.TryGetValue(id, out bool prev) && current != prev)
+                raiseEvent(player, current);
+            lastState[id] = current;
+        }
+
+        // ═══════════════════════════════════════════════
+        //  マップ変更ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickMapMonitor()
+        {
+            var currentMap = SceneMotor.Instance?.currentSceneName ?? "";
+            if (string.IsNullOrEmpty(currentMap)) return;
+
+            if (!string.IsNullOrEmpty(_lastMapName) && currentMap != _lastMapName)
+            {
+                EventBus.Raise(new MapChangedEvent(currentMap, _lastMapName));
+            }
+            _lastMapName = currentMap;
+        }
+
+        // ═══════════════════════════════════════════════
+        //  スコア変更ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickScoreMonitor()
+        {
+            var sm = ScoreManager.Instance;
+            if (sm == null) return;
+
+            // マッチポイント（チーム単位）
+            if (sm.Points != null)
+            {
+                foreach (var kvp in sm.Points)
+                {
+                    int teamId = kvp.Key;
+                    int score = kvp.Value;
+
+                    if (_lastMatchScore.TryGetValue(teamId, out int prevScore) && score != prevScore)
+                    {
+                        EventBus.Raise(new MatchScoreChangedEvent(teamId, prevScore, score));
+                    }
+                    _lastMatchScore[teamId] = score;
+                }
+            }
+
+            // ラウンドスコア（チーム単位）
+            if (sm.RoundScore != null)
+            {
+                foreach (var kvp in sm.RoundScore)
+                {
+                    int teamId = kvp.Key;
+                    int score = kvp.Value;
+
+                    if (_lastRoundScore.TryGetValue(teamId, out int prevScore) && score != prevScore)
+                    {
+                        EventBus.Raise(new RoundScoreChangedEvent(teamId, prevScore, score));
+                    }
+                    _lastRoundScore[teamId] = score;
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════
+        //  ポーズ状態ポーリング
+        // ═══════════════════════════════════════════════
+
+        private void TickPauseMonitor()
+        {
+            var pm = Object.FindObjectOfType<PauseManager>();
+            if (pm == null) return;
+
+            bool paused = pm.pause;
+            if (paused != _lastPaused)
+            {
+                if (paused)
+                    EventBus.Raise(new GamePausedEvent());
+                else
+                    EventBus.Raise(new GameResumedEvent());
+            }
+            _lastPaused = paused;
         }
 
         // ═══════════════════════════════════════════════

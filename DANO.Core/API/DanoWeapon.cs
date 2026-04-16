@@ -3,23 +3,51 @@ using UnityEngine;
 namespace DANO.API
 {
     /// <summary>
-    /// STRAFTAT 武器のラッパー。
-    /// Weapon/Gun/MeleeWeapon の詳細プロパティを直感的に公開する。
-    /// Item.WeaponComponent を経由して取得可能。
+    /// STRAFTAT 武器のラッパー基底クラス。
+    /// Get() は具象型（DanoGun, DanoShotgun 等）を返すため、キャストして固有プロパティにアクセスできる。
+    /// <code>
+    /// var weapon = DanoWeapon.Get(w);
+    /// if (weapon is DanoShotgun shotgun)
+    ///     int pellets = shotgun.PelletCount;
+    /// </code>
     /// </summary>
     public class DanoWeapon
     {
-        // ─── Static ───
+        // ─── Static Factory ───
 
-        /// <summary>Weapon コンポーネントから DanoWeapon ラッパーを作成する</summary>
-        public static DanoWeapon? Get(Weapon weapon) =>
-            weapon != null ? new DanoWeapon(weapon) : null;
+        /// <summary>
+        /// Weapon コンポーネントから適切な具象型の DanoWeapon ラッパーを作成する。
+        /// 返り値は DanoGun, DanoShotgun 等にキャスト可能。
+        /// </summary>
+        public static DanoWeapon? Get(Weapon weapon)
+        {
+            if (weapon == null) return null;
+
+            return weapon switch
+            {
+                Gun g => new DanoGun(g),
+                Shotgun sg => new DanoShotgun(sg),
+                Minigun mg => new DanoMinigun(mg),
+                ChargeGun cg => new DanoChargeGun(cg),
+                BeamGun bg => new DanoBeamGun(bg),
+                LargeRaycastGun lr => new DanoLargeRaycastGun(lr),
+                DualLauncher dl => new DanoDualLauncher(dl),
+                BumpGun bump => new DanoBumpGun(bump),
+                RepulsiveGun rg => new DanoRepulsiveGun(rg),
+                Taser t => new DanoTaser(t),
+                MeleeWeapon mw => new DanoMeleeWeapon(mw),
+                FlashLight fl => new DanoFlashLight(fl),
+                Propeller pr => new DanoPropeller(pr),
+                WeaponHandSpawner whs => new DanoWeaponHandSpawner(whs),
+                _ => new DanoWeapon(weapon),
+            };
+        }
 
         /// <summary>Item からラップされた武器情報を取得する</summary>
         public static DanoWeapon? FromItem(Item item)
         {
             var weapon = item.WeaponComponent;
-            return weapon != null ? new DanoWeapon(weapon) : null;
+            return Get(weapon);
         }
 
         // ─── インスタンス ───
@@ -27,7 +55,7 @@ namespace DANO.API
         /// <summary>生の Weapon コンポーネント（上級者向け）</summary>
         public Weapon Base { get; }
 
-        private DanoWeapon(Weapon weapon) { Base = weapon; }
+        protected DanoWeapon(Weapon weapon) { Base = weapon; }
 
         // ─── 基本プロパティ ───
 
@@ -43,7 +71,7 @@ namespace DANO.API
         /// <summary>武器の具体的な型名（Gun, Shotgun, Minigun, ChargeGun, BeamGun, MeleeWeapon 等）</summary>
         public string WeaponType => Base.GetType().Name;
 
-        // 後方互換: IsGun は IsFirearm のエイリアス
+        // 後方互換
         /// <summary>銃器かどうか（IsFirearm と同義）</summary>
         public bool IsGun => IsFirearm;
 
@@ -160,12 +188,12 @@ namespace DANO.API
         /// <summary>左手に持っているか</summary>
         public bool InLeftHand => Base.inLeftHand;
 
-        // ─── Gun 固有 ───
+        // ─── Gun 固有（後方互換） ───
 
-        /// <summary>リロード時間（Gun のみ、それ以外は 0）</summary>
-        public float ReloadTime => Base is Gun gun ? gun.reloadTime : 0f;
+        /// <summary>リロード時間（Gun 系のみ、それ以外は 0）</summary>
+        public virtual float ReloadTime => 0f;
 
-        // ─── MeleeWeapon 固有 ───
+        // ─── MeleeWeapon 固有（後方互換） ───
 
         /// <summary>近接基本攻撃ダメージ（MeleeWeapon のみ）</summary>
         public float MeleeBaseDamage => Base is MeleeWeapon melee ? melee.baseAttackDamage : 0f;
@@ -176,6 +204,6 @@ namespace DANO.API
         /// <summary>近接ノックバック力（MeleeWeapon のみ）</summary>
         public float MeleeKnockback => Base is MeleeWeapon melee ? melee.playerKnockback : 0f;
 
-        public override string ToString() => $"DanoWeapon({Name}, Ammo={Ammo})";
+        public override string ToString() => $"DanoWeapon({Name}, {WeaponType}, Ammo={Ammo})";
     }
 }

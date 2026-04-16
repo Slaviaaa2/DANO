@@ -13,7 +13,22 @@ DANO.sln
 │   ├── API/                    公開 API（プラグイン開発者が直接使う全クラス）
 │   │   ├── Player.cs               プレイヤーラッパー（EXILED 風、アクションメソッド含む）
 │   │   ├── Item.cs                 アイテムラッパー（EXILED 風）
-│   │   ├── DanoWeapon.cs           武器ラッパー（ダメージ、発射レート、精度等）
+│   │   ├── DanoWeapon.cs           武器ラッパー基底クラス（継承階層、キャスト可能）
+│   │   ├── DanoGun.cs              Gun ラッパー
+│   │   ├── DanoShotgun.cs          Shotgun ラッパー（PelletCount, Spread）
+│   │   ├── DanoMinigun.cs          Minigun ラッパー（SpinUpTime, RotationSpeed）
+│   │   ├── DanoChargeGun.cs        ChargeGun ラッパー（MaxChargeTime, Radius）
+│   │   ├── DanoBeamGun.cs          BeamGun ラッパー（LaunchForce, Radius）
+│   │   ├── DanoLargeRaycastGun.cs  LargeRaycastGun ラッパー（BulletRadius, BoxDimensions）
+│   │   ├── DanoDualLauncher.cs     DualLauncher ラッパー（各弾種フラグ）
+│   │   ├── DanoBumpGun.cs          BumpGun ラッパー（LaunchForce, Knockback）
+│   │   ├── DanoRepulsiveGun.cs     RepulsiveGun ラッパー（RepulseForce）
+│   │   ├── DanoTaser.cs            Taser ラッパー（ChargeTime, StunTime）
+│   │   ├── DanoMeleeWeapon.cs      MeleeWeapon ラッパー（攻撃ダメージ、ノックバック）
+│   │   ├── DanoFlashLight.cs       FlashLight ラッパー（IsOn）
+│   │   ├── DanoPropeller.cs        Propeller ラッパー（FlySpeed, IsFlying）
+│   │   ├── DanoWeaponHandSpawner.cs WeaponHandSpawner ラッパー（地雷/クレイモア判定）
+│   │   ├── DanoGrenade.cs          グレネードラッパー（PhysicsGrenade 隠蔽）
 │   │   ├── PlayerAPI.cs            プレイヤー便利メソッド（薄いラッパー）
 │   │   ├── ItemAPI.cs              アイテム便利メソッド（薄いラッパー）
 │   │   ├── HudAPI.cs               HUD / ヒント / メッセージ
@@ -37,7 +52,11 @@ DANO.sln
 │   │   ├── TeamEvents.cs           TeamChanged
 │   │   ├── WeaponEvents.cs         WeaponReload
 │   │   ├── GrenadeEvents.cs        GrenadeExploded
-│   │   └── DoorEvents.cs           DoorInteract（Cancel→巻戻）
+│   │   ├── DoorEvents.cs           DoorInteract（Cancel→巻戻）
+│   │   ├── MovementEvents.cs       Sprint/Crouch/Slide/Grounded/Lean/Aim 状態変化
+│   │   ├── MapEvents.cs            MapChanged
+│   │   ├── ScoreEvents.cs          MatchScoreChanged, RoundScoreChanged
+│   │   └── PauseEvents.cs          GamePaused, GameResumed
 │   ├── Plugin/                 プラグインシステム（Plugin<T>, Loader, Config, Attribute, Logger）
 │   └── UI/                     UI 内部実装（DANOCanvas, HintController, Elements/）
 └── DANO.Template/          ← プラグイン開発者向けテンプレート
@@ -61,6 +80,11 @@ DANO.sln
 
 - **`API/Player.cs`** — ゲームの `ClientInstance` を隠蔽。`Player.Get(id)`, `Player.Local`, `Player.List` でアクセス
 - **`API/Item.cs`** — ゲームの `ItemBehaviour` を隠蔽。`Item.Get(ib)`, `Item.List` でアクセス
+- **`API/DanoWeapon.cs`** — 武器ラッパー基底クラス。`DanoWeapon.Get(weapon)` で具象型を返す（キャスト可能）
+  - 14 サブクラス: `DanoGun`, `DanoShotgun`, `DanoMinigun`, `DanoChargeGun`, `DanoBeamGun`, `DanoLargeRaycastGun`, `DanoDualLauncher`, `DanoBumpGun`, `DanoRepulsiveGun`, `DanoTaser`, `DanoMeleeWeapon`, `DanoFlashLight`, `DanoPropeller`, `DanoWeaponHandSpawner`
+  - 使い方: `if (weapon is DanoShotgun sg) { int pellets = sg.PelletCount; }`
+- **`API/DanoGrenade.cs`** — グレネードラッパー。`DanoGrenade.Get(g)`, `DanoGrenade.List`, `DanoGrenade.Active` でアクセス
+- **`API/DanoDoor.cs`** — ドアラッパー。`DanoDoor.Get(d)`, `DanoDoor.List` でアクセス
 - ラッパーは `DANO.API` namespace に配置する
 - ゲームに同名クラスが存在する場合（例: グローバル `Player` クラス）、DANO.Core 内部では `API.Player` でフル修飾する
 - プラグイン側は `using DANO.API;` で namespace スコープにより解決される
@@ -90,7 +114,7 @@ DANO.sln
 | 検出方式 | 対象イベント |
 |----------|-------------|
 | Harmony パッチ | ItemPickedUp, ItemDropped, WeaponFired(Cancel可), WeaponReload, DoorInteract(Cancel可) |
-| ポーリング | PlayerDamaged(Cancel可), PlayerDied, PlayerSpawned, TeamChanged, RoundStarted/Ended, GameStarted, SpawnPhase, MatchEnded, GrenadeExploded, PlayerConnected/Disconnected |
+| ポーリング | PlayerDamaged(Cancel可), PlayerDied, PlayerSpawned, TeamChanged, RoundStarted/Ended, GameStarted, SpawnPhase, MatchEnded, GrenadeExploded, PlayerConnected/Disconnected, Movement状態変化(Sprint/Crouch/Slide/Grounded/Lean/Aim), MapChanged, MatchScoreChanged, RoundScoreChanged, GamePaused/Resumed |
 | 直接フック | ChatMessageSending(Cancel可), ChatMessageReceived |
 
 ### API クラスルール
@@ -178,9 +202,11 @@ DANO.Core 内部では `API.Player`, `API.Item` とフル修飾すること。
 ### ラッパー
 - `Player.Get(id) / Player.Local / Player.List` — `.Name`, `.Health`, `.IsAlive`, `.TeamId`, `.Position`, `.Kill()`, `.GetHeldItem()`
   - アクション: `.Damage()`, `.Heal()`, `.HealFull()`, `.Teleport()`, `.SetTeam()`, `.Freeze()`, `.Unfreeze()`, `.Stun()`, `.AddForce()`, `.Kick()`, `.Respawn()`, `.PlayAnimation()`, `.SetReady()`
-  - 移動状態: `.IsSprinting`, `.IsWalking`, `.IsCrouching`, `.IsGrounded`, `.IsSliding`, `.Speed`, `.CanMove`
+  - 移動状態: `.IsSprinting`, `.IsWalking`, `.IsCrouching`, `.IsGrounded`, `.IsSliding`, `.IsLeaning`, `.IsAiming`, `.IsScopeAiming`, `.Speed`, `.CanMove`
 - `Item.Get(ib) / Item.List` — `.Name`, `.Ammo`, `.IsHeld`, `.Holder`, `.Weapon`
-- `DanoWeapon.Get(weapon) / FromItem(item)` — `.Damage`, `.FireRate`, `.Ammo`, `.IsGun`, `.IsMelee`, `.ReloadTime`
+- `DanoWeapon.Get(weapon) / FromItem(item)` — 基底: `.Damage`, `.FireRate`, `.Ammo`, `.IsGun`, `.IsMelee`, `.ReloadTime`, `.WeaponType`
+  - キャスト: `DanoGun`(ReloadTime), `DanoShotgun`(PelletCount, Spread), `DanoMinigun`(SpinUpTime, RotationSpeed), `DanoChargeGun`(MaxChargeTime, Radius), `DanoBeamGun`(LaunchForce, Radius), `DanoLargeRaycastGun`(BulletRadius), `DanoDualLauncher`(各弾種フラグ), `DanoBumpGun`(LaunchForce), `DanoRepulsiveGun`(RepulseForce), `DanoTaser`(ChargeTime, StunTime), `DanoMeleeWeapon`(BaseAttackDamage, PlayerKnockback, HitsAmount), `DanoFlashLight`(IsOn), `DanoPropeller`(FlySpeed, IsFlying), `DanoWeaponHandSpawner`(IsProximityMine, IsClaymore)
+- `DanoGrenade.Get(g) / DanoGrenade.List / DanoGrenade.Active` — `.Name`, `.Position`, `.ExplosionRadius`, `.IsFragGrenade`, `.IsStunGrenade`, `.StunTime`, `.Velocity`, `.IsActive`
 - `DanoDoor.Get(door) / DanoDoor.List` — `.IsOpen`, `.Toggle()`, `.Open()`, `.Close()`
 
 ### 便利メソッド
@@ -201,15 +227,18 @@ DANO.Core 内部では `API.Player`, `API.Item` とフル修飾すること。
 ### イベント
 - `EventBus.Subscribe<T>(handler, priority) / Unsubscribe<T>() / Raise<T>()`
 - Player: `PlayerSpawnedEvent`, `PlayerDamagedEvent`(Cancel可), `PlayerDiedEvent`, `WeaponFiredEvent`(Cancel可)
-- Game: `RoundStartedEvent`, `RoundEndedEvent`, `MatchEndedEvent`
+- Game: `RoundStartedEvent`, `RoundEndedEvent`, `MatchEndedEvent`, `SpawnPhaseStartedEvent`, `GameStartedEvent`
 - Chat: `ChatMessageSendingEvent`(Cancel可), `ChatMessageReceivedEvent`
 - Connection: `PlayerConnectedEvent`, `PlayerDisconnectedEvent`
 - Item: `ItemPickedUpEvent`, `ItemDroppedEvent`
 - Team: `TeamChangedEvent`
-- Weapon: `WeaponReloadEvent`, `MeleeHitEvent`
+- Weapon: `WeaponReloadEvent`
 - Grenade: `GrenadeExplodedEvent`
 - Door: `DoorInteractEvent`(Cancel可)
-- Game(追加): `SpawnPhaseStartedEvent`, `GameStartedEvent`
+- Movement: `PlayerSprintChangedEvent`, `PlayerCrouchChangedEvent`, `PlayerSlideChangedEvent`, `PlayerGroundedChangedEvent`, `PlayerLeanChangedEvent`, `PlayerAimChangedEvent`
+- Map: `MapChangedEvent`
+- Score: `MatchScoreChangedEvent`, `RoundScoreChangedEvent`
+- Pause: `GamePausedEvent`, `GameResumedEvent`
 
 ### プラグインシステム
 - `Plugin<TConfig>` 基底クラス — `OnEnabled()`, `OnDisabled()`, `Log`, `Logger`, `Config`
