@@ -42,7 +42,8 @@ jobs:
 
       - name: Pack NuGet package
         run: |
-          nuget pack DANO.Core.nuspec \
+          sudo apt-get update -qq && sudo apt-get install -y -qq mono-runtime > /dev/null
+          mono "$NUGET" pack DANO.Core.nuspec \
             -Version ${{ steps.version.outputs.version }} \
             -OutputDirectory ./nupkg
 
