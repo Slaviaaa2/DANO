@@ -30,6 +30,7 @@ jobs:
         run: |
           cd dist
           zip ../DANO-${{ steps.version.outputs.version }}.zip DANO.Core.dll
+          cp ../DANO-${{ steps.version.outputs.version }}.zip ../DANO.zip
 
       - name: Generate release notes
         id: notes
@@ -49,6 +50,8 @@ jobs:
         with:
           name: DANO v${{ steps.version.outputs.version }}
           body_path: release_notes.txt
-          files: DANO-${{ steps.version.outputs.version }}.zip
+          files: |
+            DANO-${{ steps.version.outputs.version }}.zip
+            DANO.zip
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
