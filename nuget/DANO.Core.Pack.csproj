@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <NoBuild>true</NoBuild>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+
+    <!-- NuGet メタデータ -->
+    <PackageId>DANO.Core</PackageId>
+    <Authors>Slaviaaa2</Authors>
+    <Description>EXILED-inspired BepInEx 5 mod framework for STRAFTAT. Provides event system, player/item/weapon wrappers, chat commands, HUD API, and plugin lifecycle management.</Description>
+    <PackageTags>straftat;bepinex;modding;unity</PackageTags>
+    <PackageProjectUrl>https://github.com/Slaviaaa2/DANO</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Slaviaaa2/DANO</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pre-built DLL を lib/net472/ に配置 -->
+    <None Include="../dist/DANO.Core.dll" Pack="true" PackagePath="lib/net472/" />
+    <!-- README.md を NuGet.org 表示用に配置 -->
+    <None Include="../README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

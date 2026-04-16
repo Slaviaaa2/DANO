@@ -20,9 +20,6 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Setup NuGet
-        uses: nuget/setup-nuget@v2
-
       - name: Extract version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
@@ -42,10 +39,9 @@ jobs:
 
       - name: Pack NuGet package
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq mono-runtime > /dev/null
-          mono "$NUGET" pack DANO.Core.nuspec \
-            -Version ${{ steps.version.outputs.version }} \
-            -OutputDirectory ./nupkg
+          dotnet pack nuget/DANO.Core.Pack.csproj \
+            -p:PackageVersion=${{ steps.version.outputs.version }} \
+            --output ./nupkg
 
       - name: Push to NuGet.org
         run: |
