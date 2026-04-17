@@ -101,6 +101,8 @@ namespace DANO.UI
             rt.pivot = new Vector2(0.5f, 0f);
 
             var tmp = go.AddComponent<TextMeshProUGUI>();
+            var jpFont = DANOCanvas.ResolveJapaneseFont();
+            if (jpFont != null) tmp.font = jpFont;
             tmp.text = req.Text;
             tmp.fontSize = req.FontSize;
             tmp.color = req.Color;

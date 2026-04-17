@@ -20,10 +20,15 @@ namespace DANO.API
             Sender = sender;
         }
 
-        /// <summary>ローカルにメッセージを表示する</summary>
+        /// <summary>ローカルにメッセージを表示する。改行を含む場合は 1 行ずつ送る。</summary>
         public void Reply(string message)
         {
-            HudAPI.LocalMessage(message);
+            foreach (var line in message.Split('\n'))
+            {
+                var trimmed = line.TrimEnd('\r');
+                if (trimmed.Length > 0)
+                    HudAPI.LocalMessage(trimmed);
+            }
         }
     }
 }

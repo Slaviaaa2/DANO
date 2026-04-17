@@ -1,6 +1,6 @@
 namespace DANO.Events
 {
-    /// <summary>ローカルプレイヤーがチャットメッセージを送信しようとしたときのイベント</summary>
+    /// <summary>ローカルプレイヤーがチャットメッセージを送信しようとしたときのイベント（Cancel可）</summary>
     public class ChatMessageSendingEvent
     {
         public string Username { get; }
@@ -10,6 +10,19 @@ namespace DANO.Events
         public bool Cancel { get; set; }
 
         internal ChatMessageSendingEvent(string username, string message)
+        {
+            Username = username;
+            Message = message;
+        }
+    }
+
+    /// <summary>ローカルプレイヤーがチャットメッセージを送信した後のイベント（通知のみ）</summary>
+    public class ChatMessageSentEvent
+    {
+        public string Username { get; }
+        public string Message { get; }
+
+        internal ChatMessageSentEvent(string username, string message)
         {
             Username = username;
             Message = message;

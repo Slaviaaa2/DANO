@@ -2,8 +2,27 @@ using DANO.API;
 
 namespace DANO.Events
 {
-    /// <summary>ドアの開閉状態が変化した時に発火するイベント</summary>
-    public class DoorInteractEvent
+    /// <summary>ドアが操作されようとしているときのイベント（Cancel可）</summary>
+    public class DoorInteractingEvent
+    {
+        /// <summary>操作されるドア</summary>
+        public DanoDoor Door { get; }
+
+        /// <summary>インタラクト前の開閉状態（true = 開いていた）</summary>
+        public bool WasOpen { get; }
+
+        /// <summary>trueにするとドアの開閉をキャンセルする</summary>
+        public bool Cancel { get; set; }
+
+        internal DoorInteractingEvent(Door door, bool wasOpen)
+        {
+            Door = DanoDoor.Get(door);
+            WasOpen = wasOpen;
+        }
+    }
+
+    /// <summary>ドアが操作された後のイベント（通知のみ）</summary>
+    public class DoorInteractedEvent
     {
         /// <summary>操作されたドア</summary>
         public DanoDoor Door { get; }
@@ -11,12 +30,9 @@ namespace DANO.Events
         /// <summary>インタラクト前の開閉状態（true = 開いていた）</summary>
         public bool WasOpen { get; }
 
-        /// <summary>trueにするとドアの開閉を巻き戻す</summary>
-        public bool Cancel { get; set; }
-
-        internal DoorInteractEvent(Door door, bool wasOpen)
+        internal DoorInteractedEvent(DanoDoor door, bool wasOpen)
         {
-            Door = DanoDoor.Get(door);
+            Door = door;
             WasOpen = wasOpen;
         }
     }

@@ -1,12 +1,14 @@
 namespace DANO.Events
 {
-    /// <summary>武器がリロードされたときのイベント</summary>
-    public class WeaponReloadEvent
+    /// <summary>武器がリロードされようとしているときのイベント（Cancel可）</summary>
+    public class WeaponReloadingEvent
     {
         public API.Item? Item { get; }
         public API.Player? Player { get; }
+        /// <summary>trueにするとリロードをキャンセルする</summary>
+        public bool Cancel { get; set; }
 
-        internal WeaponReloadEvent(Weapon weapon)
+        internal WeaponReloadingEvent(Weapon weapon)
         {
             var ib = weapon.GetComponent<ItemBehaviour>();
             Item = ib != null ? API.Item.Get(ib) : null;
@@ -14,5 +16,17 @@ namespace DANO.Events
         }
     }
 
-    // MeleeHitEvent は削除（ポーリングでの信頼性ある検出方法がないため）
+    /// <summary>武器がリロードされた後のイベント（通知のみ）</summary>
+    public class WeaponReloadedEvent
+    {
+        public API.Item? Item { get; }
+        public API.Player? Player { get; }
+
+        internal WeaponReloadedEvent(Weapon weapon)
+        {
+            var ib = weapon.GetComponent<ItemBehaviour>();
+            Item = ib != null ? API.Item.Get(ib) : null;
+            Player = API.Player.Local;
+        }
+    }
 }

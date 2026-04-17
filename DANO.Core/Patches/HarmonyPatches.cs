@@ -6,7 +6,7 @@ using UnityEngine;
 namespace DANO.Patches
 {
     // ═══════════════════════════════════════════════
-    //  アイテム拾得/投棄 — Harmony で直接検出
+    //  アイテム拾得 — Prefix (Cancel可) + Postfix (通知)
     // ═══════════════════════════════════════════════
 
     [HarmonyPatch(typeof(ItemBehaviour), nameof(ItemBehaviour.OnGrab))]
@@ -15,20 +15,50 @@ namespace DANO.Patches
         // OnDrop 時には Holder が既に null になっているため、OnGrab で記録しておく
         internal static readonly Dictionary<int, API.Player> LastHolders = new Dictionary<int, API.Player>();
 
+        [HarmonyPrefix]
+        public static bool Prefix(ItemBehaviour __instance, bool owner)
+        {
+            if (!owner) return true;
+
+            var ev = new ItemPickingUpEvent(__instance);
+            EventBus.Raise(ev);
+
+            if (ev.Cancel) return false;
+
+            var player = API.Player.Local;
+            if (player != null)
+                LastHolders[__instance.GetInstanceID()] = player;
+
+            return true;
+        }
+
         [HarmonyPostfix]
         public static void Postfix(ItemBehaviour __instance, bool owner)
         {
             if (!owner) return;
-            var player = API.Player.Local;
-            if (player != null)
-                LastHolders[__instance.GetInstanceID()] = player;
             EventBus.Raise(new ItemPickedUpEvent(__instance));
         }
     }
 
+    // ═══════════════════════════════════════════════
+    //  アイテム投棄 — Prefix (Cancel可) + Postfix (通知)
+    // ═══════════════════════════════════════════════
+
     [HarmonyPatch(typeof(ItemBehaviour), nameof(ItemBehaviour.OnDrop))]
     internal static class ItemOnDropPatch
     {
+        [HarmonyPrefix]
+        public static bool Prefix(ItemBehaviour __instance)
+        {
+            int id = __instance.GetInstanceID();
+            ItemOnGrabPatch.LastHolders.TryGetValue(id, out var lastHolder);
+
+            var ev = new ItemDroppingEvent(__instance, lastHolder);
+            EventBus.Raise(ev);
+
+            return !ev.Cancel;
+        }
+
         [HarmonyPostfix]
         public static void Postfix(ItemBehaviour __instance)
         {
@@ -82,10 +112,10 @@ namespace DANO.Patches
 
             if (fired)
             {
-                var ev = new WeaponFiredEvent(__instance);
-                EventBus.Raise(ev);
+                var firingEv = new WeaponFiringEvent(__instance);
+                EventBus.Raise(firingEv);
 
-                if (ev.Cancel)
+                if (firingEv.Cancel)
                 {
                     if (__instance.reloadWeapon)
                     {
@@ -98,12 +128,32 @@ namespace DANO.Patches
                         currentAmmo = _prevAmmo[id];
                     }
                 }
+                else
+                {
+                    // Cancel されなかった → 射撃確定の通知
+                    EventBus.Raise(new WeaponFiredEvent(firingEv.Item, firingEv.Player));
+                }
             }
 
-            // リロード検出: isReloading が false → true
-            if (_prevReloading.TryGetValue(id, out bool wasReloading) && isReloading && !wasReloading)
+            // リロード検出: isReloading が false → true（開始）
+            if (_prevReloading.TryGetValue(id, out bool wasReloading))
             {
-                EventBus.Raise(new WeaponReloadEvent(__instance));
+                if (isReloading && !wasReloading)
+                {
+                    var reloadingEv = new WeaponReloadingEvent(__instance);
+                    EventBus.Raise(reloadingEv);
+
+                    if (reloadingEv.Cancel)
+                    {
+                        __instance.isReloading = false;
+                        isReloading = false;
+                    }
+                }
+                else if (!isReloading && wasReloading)
+                {
+                    // リロード完了（isReloading が true → false）
+                    EventBus.Raise(new WeaponReloadedEvent(__instance));
+                }
             }
 
             // 現在の値を保存（次フレームの比較用）
@@ -114,19 +164,26 @@ namespace DANO.Patches
     }
 
     // ═══════════════════════════════════════════════
-    //  ドア開閉 — OnInteract で直接検出
+    //  ドア開閉 — Prefix (Cancel可) + Postfix (通知)
     // ═══════════════════════════════════════════════
 
     [HarmonyPatch(typeof(Door), nameof(Door.OnInteract))]
     internal static class DoorInteractPatch
     {
         [HarmonyPrefix]
-        public static bool Prefix(Door __instance, Transform player)
+        public static bool Prefix(Door __instance, Transform player, out bool __state)
         {
-            bool wasOpen = __instance.sync___get_value_isOpen();
-            var ev = new DoorInteractEvent(__instance, wasOpen);
+            __state = __instance.sync___get_value_isOpen();
+            var ev = new DoorInteractingEvent(__instance, __state);
             EventBus.Raise(ev);
             return !ev.Cancel;
+        }
+
+        [HarmonyPostfix]
+        public static void Postfix(Door __instance, bool __state)
+        {
+            var door = API.DanoDoor.Get(__instance);
+            EventBus.Raise(new DoorInteractedEvent(door, __state));
         }
     }
 }

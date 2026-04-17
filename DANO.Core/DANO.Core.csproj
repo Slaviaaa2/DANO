@@ -79,6 +79,10 @@
       <HintPath>$(StraftatLibs)\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.TextCoreFontEngineModule">
+      <HintPath>$(StraftatLibs)\UnityEngine.TextCoreFontEngineModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
 
     <!-- ゲームアセンブリ（publicized版） -->
     <Reference Include="Assembly-CSharp">

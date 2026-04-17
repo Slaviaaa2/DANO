@@ -1,6 +1,7 @@
 using DANO.API;
 using DANO.Events;
 using DANO.Plugin;
+using TMPro;
 using UnityEngine;
 
 namespace MyPlugin
@@ -17,17 +18,21 @@ namespace MyPlugin
             Logger.Info("MyPlugin が有効になりました！");
 
             // ── イベント購読 ──
+            // -ed イベント（通知のみ）
             EventBus.Subscribe<PlayerDiedEvent>(OnPlayerDied);
             EventBus.Subscribe<PlayerDamagedEvent>(OnPlayerDamaged);
             EventBus.Subscribe<RoundStartedEvent>(OnRoundStarted);
             EventBus.Subscribe<ItemPickedUpEvent>(OnItemPickedUp);
-            EventBus.Subscribe<WeaponReloadEvent>(OnWeaponReload);
+            EventBus.Subscribe<WeaponReloadedEvent>(OnWeaponReloaded);
             EventBus.Subscribe<GrenadeExplodedEvent>(OnGrenadeExploded);
             EventBus.Subscribe<PlayerConnectedEvent>(OnPlayerConnected);
             EventBus.Subscribe<WeaponFiredEvent>(OnWeaponFired);
             EventBus.Subscribe<ItemDroppedEvent>(OnItemDropped);
-            EventBus.Subscribe<DoorInteractEvent>(OnDoorInteract);
+            EventBus.Subscribe<DoorInteractedEvent>(OnDoorInteracted);
             EventBus.Subscribe<GameStartedEvent>(OnGameStarted);
+
+            // -ing イベント（Cancel可）の例
+            EventBus.Subscribe<PlayerDamagingEvent>(OnPlayerDamaging);
 
             // ── コマンド登録 ──
             CommandManager.Register("heal", OnHealCommand, "体力を全回復する");
@@ -40,6 +45,7 @@ namespace MyPlugin
             CommandManager.Register("find", OnFindCommand, "名前でプレイヤーを検索");
             CommandManager.Register("guntest", OnGunTestCommand, "持っている銃の内部状態をダンプ");
             CommandManager.Register("eventtest", OnEventTestCommand, "全イベントの動作テスト");
+            CommandManager.Register("fonts", OnFontsCommand, "ロード済み TMP フォントを全てログに出力");
 
             HudAPI.ShowHint($"<color=#00FFFF>{Config.WelcomeMessage}</color>", duration: 4f);
         }
@@ -50,13 +56,14 @@ namespace MyPlugin
             EventBus.Unsubscribe<PlayerDamagedEvent>(OnPlayerDamaged);
             EventBus.Unsubscribe<RoundStartedEvent>(OnRoundStarted);
             EventBus.Unsubscribe<ItemPickedUpEvent>(OnItemPickedUp);
-            EventBus.Unsubscribe<WeaponReloadEvent>(OnWeaponReload);
+            EventBus.Unsubscribe<WeaponReloadedEvent>(OnWeaponReloaded);
             EventBus.Unsubscribe<GrenadeExplodedEvent>(OnGrenadeExploded);
             EventBus.Unsubscribe<PlayerConnectedEvent>(OnPlayerConnected);
             EventBus.Unsubscribe<WeaponFiredEvent>(OnWeaponFired);
             EventBus.Unsubscribe<ItemDroppedEvent>(OnItemDropped);
-            EventBus.Unsubscribe<DoorInteractEvent>(OnDoorInteract);
+            EventBus.Unsubscribe<DoorInteractedEvent>(OnDoorInteracted);
             EventBus.Unsubscribe<GameStartedEvent>(OnGameStarted);
+            EventBus.Unsubscribe<PlayerDamagingEvent>(OnPlayerDamaging);
 
             CommandManager.Unregister("heal");
             CommandManager.Unregister("info");
@@ -65,12 +72,23 @@ namespace MyPlugin
             CommandManager.Unregister("freeze");
             CommandManager.Unregister("guntest");
             CommandManager.Unregister("eventtest");
+            CommandManager.Unregister("fonts");
             CommandManager.Unregister("scramble");
             CommandManager.Unregister("doors");
             CommandManager.Unregister("find");
         }
 
-        // ────────── イベントハンドラ ──────────
+        // ────────── -ing イベントハンドラ（Cancel可） ──────────
+
+        private void OnPlayerDamaging(PlayerDamagingEvent ev)
+        {
+            // 例: 5ダメージ以下を無効化
+            // if (ev.Damage <= 5f) ev.Cancel = true;
+
+            Logger.Debug($"[ing] {ev.Player?.Name} が {ev.Damage} ダメージを受けようとしている");
+        }
+
+        // ────────── -ed イベントハンドラ（通知のみ） ──────────
 
         private void OnPlayerDied(PlayerDiedEvent ev)
         {
@@ -108,11 +126,11 @@ namespace MyPlugin
             Logger.Info($"{ev.Player?.Name} が {ev.Item.Name} を捨てた");
         }
 
-        private void OnWeaponReload(WeaponReloadEvent ev)
+        private void OnWeaponReloaded(WeaponReloadedEvent ev)
         {
             var weapon = ev.Item?.Weapon;
             if (weapon == null) return;
-            Logger.Info($"{ev.Player?.Name} が {weapon.Name} をリロード (弾数: {weapon.Ammo})");
+            Logger.Info($"{ev.Player?.Name} が {weapon.Name} のリロード完了 (弾数: {weapon.Ammo})");
         }
 
         private void OnGrenadeExploded(GrenadeExplodedEvent ev)
@@ -126,7 +144,7 @@ namespace MyPlugin
             HudAPI.ShowHint($"<color=#00FF00>{ev.PlayerName} が参加しました</color>", duration: 3f);
         }
 
-        private void OnDoorInteract(DoorInteractEvent ev)
+        private void OnDoorInteracted(DoorInteractedEvent ev)
         {
             var action = ev.WasOpen ? "閉じた" : "開けた";
             Logger.Info($"ドア {ev.Door.Name} を{action}");
@@ -314,6 +332,27 @@ namespace MyPlugin
             ctx.Reply("[2] /diag コマンドで詳細診断を実行できます");
 
             ctx.Reply("=== テスト完了 ===");
+        }
+
+        private void OnFontsCommand(CommandContext ctx)
+        {
+            var fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
+            Logger.Info($"=== ロード済み TMP フォント ({fonts.Length}件) ===");
+            foreach (var f in fonts)
+            {
+                bool hasHira  = f.HasCharacter('あ');
+                bool hasKanji = f.HasCharacter('漢');
+                bool hasKata  = f.HasCharacter('ア');
+                Logger.Info(
+                    $"  [{f.name}]" +
+                    $"  ひらがな:{(hasHira  ? "○" : "×")}" +
+                    $"  カタカナ:{(hasKata  ? "○" : "×")}" +
+                    $"  漢字:{(hasKanji ? "○" : "×")}" +
+                    $"  Atlas:{f.atlasWidth}x{f.atlasHeight}" +
+                    $"  Dynamic:{f.atlasPopulationMode}");
+            }
+            Logger.Info("=== フォント一覧ここまで ===");
+            ctx.Reply($"TMP フォント {fonts.Length} 件をログに出力しました。BepInEx/LogOutput.log を確認してください。");
         }
 
         // ────────── 設定クラス ──────────

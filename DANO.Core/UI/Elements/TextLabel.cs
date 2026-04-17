@@ -70,6 +70,8 @@ namespace DANO.UI.Elements
             _rt.sizeDelta = new Vector2(600f, 200f);
 
             _tmp = _go.AddComponent<TextMeshProUGUI>();
+            var jpFont = DANOCanvas.ResolveJapaneseFont();
+            if (jpFont != null) _tmp.font = jpFont;
             _tmp.text = text;
             _tmp.fontSize = fontSize;
             _tmp.color = color ?? Color.white;

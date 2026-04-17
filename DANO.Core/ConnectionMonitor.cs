@@ -221,9 +221,16 @@ namespace DANO
             EventBus.Raise(ev);
 
             if (ev.Cancel && _chatInputField != null)
+            {
                 _chatInputField.text = "";
-            else if (ev.Message != text && _chatInputField != null)
-                _chatInputField.text = ev.Message;
+            }
+            else
+            {
+                if (ev.Message != text && _chatInputField != null)
+                    _chatInputField.text = ev.Message;
+                // Cancel されなかった → 送信確定の通知
+                EventBus.Raise(new ChatMessageSentEvent(username, ev.Message));
+            }
         }
 
         // ═══════════════════════════════════════════════
@@ -273,7 +280,7 @@ namespace DANO
                         float damage = prevHp - currentHp;
                         if (damage < 500f)
                         {
-                            var ev = new PlayerDamagedEvent(ph, damage, ph.killer);
+                            var ev = new PlayerDamagingEvent(ph, damage, ph.killer);
                             EventBus.Raise(ev);
 
                             // Cancel → HP を回復して巻き戻す
@@ -281,6 +288,11 @@ namespace DANO
                             {
                                 ph.health = prevHp;
                                 currentHp = prevHp;
+                            }
+                            else
+                            {
+                                // Cancel されなかった → ダメージ確定の通知
+                                EventBus.Raise(new PlayerDamagedEvent(ev.Player, ev.Attacker, ev.Damage));
                             }
                         }
                     }
@@ -399,7 +411,7 @@ namespace DANO
                 {
                     if (currentAmmo < prevAmmo && !isReloading)
                     {
-                        var ev = new WeaponFiredEvent(weapon);
+                        var ev = new WeaponFiringEvent(weapon);
                         EventBus.Raise(ev);
 
                         // Cancel → 弾を巻き戻す
@@ -407,6 +419,10 @@ namespace DANO
                         {
                             weapon.currentAmmo = prevAmmo;
                             currentAmmo = prevAmmo;
+                        }
+                        else
+                        {
+                            EventBus.Raise(new WeaponFiredEvent(ev.Item, ev.Player));
                         }
                     }
                 }
@@ -417,7 +433,7 @@ namespace DANO
                 {
                     if (isReloading && !wasReloading)
                     {
-                        EventBus.Raise(new WeaponReloadEvent(weapon));
+                        EventBus.Raise(new WeaponReloadingEvent(weapon));
                     }
                 }
                 _lastReloading[id] = isReloading;
@@ -441,7 +457,7 @@ namespace DANO
                 {
                     if (isOpen != wasOpen)
                     {
-                        var ev = new DoorInteractEvent(door, wasOpen);
+                        var ev = new DoorInteractingEvent(door, wasOpen);
                         EventBus.Raise(ev);
 
                         // Cancel → ドアを元に戻す

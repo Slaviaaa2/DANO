@@ -44,15 +44,15 @@ DANO.sln
 │   │   └── CommandContext.cs       コマンド実行コンテキスト
 │   ├── Events/                 イベントデータクラス + EventBus
 │   │   ├── EventBus.cs             イベントバス本体（優先度付き Subscribe）
-│   │   ├── PlayerEvents.cs         Spawned, Damaged(Cancel→巻戻), Died, WeaponFired(Cancel→巻戻)
+│   │   ├── PlayerEvents.cs         Spawned, Damaging(Cancel可)/Damaged, Died, Firing(Cancel可)/Fired
 │   │   ├── GameEvents.cs           RoundStarted, RoundEnded, MatchEnded
-│   │   ├── ChatEvents.cs           ChatMessageSending(Cancel可), ChatMessageReceived
+│   │   ├── ChatEvents.cs           MessageSending(Cancel可)/MessageSent, MessageReceived
 │   │   ├── ConnectionEvents.cs     PlayerConnected, PlayerDisconnected
-│   │   ├── ItemEvents.cs           ItemPickedUp, ItemDropped
+│   │   ├── ItemEvents.cs           PickingUp(Cancel可)/PickedUp, Dropping(Cancel可)/Dropped
 │   │   ├── TeamEvents.cs           TeamChanged
-│   │   ├── WeaponEvents.cs         WeaponReload
+│   │   ├── WeaponEvents.cs         Reloading(Cancel可)/Reloaded
 │   │   ├── GrenadeEvents.cs        GrenadeExploded
-│   │   ├── DoorEvents.cs           DoorInteract（Cancel→巻戻）
+│   │   ├── DoorEvents.cs           Interacting(Cancel可)/Interacted
 │   │   ├── MovementEvents.cs       Sprint/Crouch/Slide/Grounded/Lean/Aim 状態変化
 │   │   ├── MapEvents.cs            MapChanged
 │   │   ├── ScoreEvents.cs          MatchScoreChanged, RoundScoreChanged
@@ -89,13 +89,26 @@ DANO.sln
 - ゲームに同名クラスが存在する場合（例: グローバル `Player` クラス）、DANO.Core 内部では `API.Player` でフル修飾する
 - プラグイン側は `using DANO.API;` で namespace スコープにより解決される
 
-### イベント命名規則
+### イベント命名規則（EXILED 準拠 -ing/-ed ペア方式）
 
-| パターン | 命名 | 例 |
-|---------|------|-----|
-| 発生した | `〇〇Event` | `PlayerDiedEvent`, `RoundStartedEvent` |
-| これから発生する（Cancel 可） | `〇〇Event` + `Cancel` プロパティ | `PlayerDamagedEvent`, `ChatMessageSendingEvent` |
-| 進行形（ing）は Cancel 可を示唆 | `〇〇ingEvent` | `ChatMessageSendingEvent` |
+| パターン | 命名 | Cancel | 例 |
+|---------|------|--------|-----|
+| これから発生する（事前） | `〇〇ingEvent` | **可能** | `PlayerDamagingEvent`, `WeaponFiringEvent` |
+| 発生した（事後・通知のみ） | `〇〇edEvent` | 不可 | `PlayerDamagedEvent`, `WeaponFiredEvent` |
+| 変化のみ（ing/ed の区別なし） | `〇〇ChangedEvent` | 不可 | `TeamChangedEvent`, `MapChangedEvent` |
+| 一時点の出来事（区別不要） | `〇〇Event` | 不可 | `PlayerDiedEvent`, `RoundStartedEvent` |
+
+**ペア一覧:**
+
+| -ing（Cancel可） | -ed（通知のみ） |
+|----------------|----------------|
+| `PlayerDamagingEvent` | `PlayerDamagedEvent` |
+| `WeaponFiringEvent` | `WeaponFiredEvent` |
+| `WeaponReloadingEvent` | `WeaponReloadedEvent` |
+| `ItemPickingUpEvent` | `ItemPickedUpEvent` |
+| `ItemDroppingEvent` | `ItemDroppedEvent` |
+| `DoorInteractingEvent` | `DoorInteractedEvent` |
+| `ChatMessageSendingEvent` | `ChatMessageSentEvent` |
 
 ### イベントクラスルール
 
@@ -113,9 +126,9 @@ DANO.sln
 
 | 検出方式 | 対象イベント |
 |----------|-------------|
-| Harmony パッチ | ItemPickedUp, ItemDropped, WeaponFired(Cancel可), WeaponReload, DoorInteract(Cancel可) |
-| ポーリング | PlayerDamaged(Cancel可), PlayerDied, PlayerSpawned, TeamChanged, RoundStarted/Ended, GameStarted, SpawnPhase, MatchEnded, GrenadeExploded, PlayerConnected/Disconnected, Movement状態変化(Sprint/Crouch/Slide/Grounded/Lean/Aim), MapChanged, MatchScoreChanged, RoundScoreChanged, GamePaused/Resumed |
-| 直接フック | ChatMessageSending(Cancel可), ChatMessageReceived |
+| Harmony パッチ | ItemPickingUp(Cancel可)/PickedUp, ItemDropping(Cancel可)/Dropped, WeaponFiring(Cancel可)/Fired, WeaponReloading(Cancel可)/Reloaded, DoorInteracting(Cancel可)/Interacted |
+| ポーリング | PlayerDamaging(Cancel可)/Damaged, PlayerDied, PlayerSpawned, TeamChanged, RoundStarted/Ended, GameStarted, SpawnPhase, MatchEnded, GrenadeExploded, PlayerConnected/Disconnected, Movement状態変化(Sprint/Crouch/Slide/Grounded/Lean/Aim), MapChanged, MatchScoreChanged, RoundScoreChanged, GamePaused/Resumed |
+| 直接フック | ChatMessageSending(Cancel可)/Sent, ChatMessageReceived |
 
 ### API クラスルール
 
@@ -226,15 +239,15 @@ DANO.Core 内部では `API.Player`, `API.Item` とフル修飾すること。
 
 ### イベント
 - `EventBus.Subscribe<T>(handler, priority) / Unsubscribe<T>() / Raise<T>()`
-- Player: `PlayerSpawnedEvent`, `PlayerDamagedEvent`(Cancel可), `PlayerDiedEvent`, `WeaponFiredEvent`(Cancel可)
+- Player: `PlayerSpawnedEvent`, `PlayerDamagingEvent`(Cancel可)→`PlayerDamagedEvent`, `PlayerDiedEvent`
+- Weapon: `WeaponFiringEvent`(Cancel可)→`WeaponFiredEvent`, `WeaponReloadingEvent`(Cancel可)→`WeaponReloadedEvent`
+- Item: `ItemPickingUpEvent`(Cancel可)→`ItemPickedUpEvent`, `ItemDroppingEvent`(Cancel可)→`ItemDroppedEvent`
+- Door: `DoorInteractingEvent`(Cancel可)→`DoorInteractedEvent`
+- Chat: `ChatMessageSendingEvent`(Cancel可)→`ChatMessageSentEvent`, `ChatMessageReceivedEvent`
 - Game: `RoundStartedEvent`, `RoundEndedEvent`, `MatchEndedEvent`, `SpawnPhaseStartedEvent`, `GameStartedEvent`
-- Chat: `ChatMessageSendingEvent`(Cancel可), `ChatMessageReceivedEvent`
 - Connection: `PlayerConnectedEvent`, `PlayerDisconnectedEvent`
-- Item: `ItemPickedUpEvent`, `ItemDroppedEvent`
 - Team: `TeamChangedEvent`
-- Weapon: `WeaponReloadEvent`
 - Grenade: `GrenadeExplodedEvent`
-- Door: `DoorInteractEvent`(Cancel可)
 - Movement: `PlayerSprintChangedEvent`, `PlayerCrouchChangedEvent`, `PlayerSlideChangedEvent`, `PlayerGroundedChangedEvent`, `PlayerLeanChangedEvent`, `PlayerAimChangedEvent`
 - Map: `MapChangedEvent`
 - Score: `MatchScoreChangedEvent`, `RoundScoreChangedEvent`
