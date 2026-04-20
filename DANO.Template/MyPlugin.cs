@@ -201,7 +201,7 @@ namespace MyPlugin
                 info += $" | ノックバック: {weapon.MeleeKnockback:F1}";
 
             // 具象型へのキャスト例
-            if (weapon is DANO.API.Shotgun sg)
+            if (weapon is ShotgunWeapon sg)
                 info += $" | ペレット: {sg.PelletCount}";
 
             ctx.Reply(info);

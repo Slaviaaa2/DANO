@@ -61,6 +61,17 @@ namespace DANO.API
             }
         }
 
+        /// <summary>アイテムの種別</summary>
+        public ItemType Type
+        {
+            get
+            {
+                if (WeaponComponent != null) return ItemType.Weapon;
+                if (Base.GetComponent<PhysicsGrenade>() != null) return ItemType.Grenade;
+                return ItemType.Unknown;
+            }
+        }
+
         /// <summary>アイテムをネットワーク上から削除する</summary>
         public void Destroy()
         {
