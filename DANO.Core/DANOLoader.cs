@@ -95,6 +95,6 @@ namespace DANO
     {
         public const string GUID    = "dev.slaviaaa.dano";
         public const string Name    = "DANO";
-        public const string Version = "0.6.0";
+        public const string Version = "1.0.0";
     }
 }

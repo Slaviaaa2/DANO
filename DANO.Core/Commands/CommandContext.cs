@@ -27,7 +27,7 @@ namespace DANO.API
             {
                 var trimmed = line.TrimEnd('\r');
                 if (trimmed.Length > 0)
-                    HudAPI.LocalMessage(trimmed);
+                    Hud.LocalMessage(trimmed);
             }
         }
     }

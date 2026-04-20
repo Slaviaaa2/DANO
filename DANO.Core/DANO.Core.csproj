@@ -12,7 +12,7 @@
 
     <!-- NuGet パッケージメタデータ -->
     <PackageId>DANO.Core</PackageId>
-    <PackageVersion>0.5.0</PackageVersion>
+    <PackageVersion>1.0.0</PackageVersion>
     <Authors>Slaviaaa2</Authors>
     <Description>EXILED-inspired BepInEx 5 mod framework for STRAFTAT. Provides event system, player/item/weapon wrappers, chat commands, HUD API, and plugin lifecycle management.</Description>
     <PackageTags>straftat;bepinex;modding;unity</PackageTags>

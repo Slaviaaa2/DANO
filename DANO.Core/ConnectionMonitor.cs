@@ -113,7 +113,7 @@ namespace DANO
 
         private void Update()
         {
-            DanoTimer.Tick();
+            Timer.Tick();
 
             // チャット入力フィールドの onSubmit に直接フック
             if (!_chatHooked || _chatInputField == null)
@@ -857,7 +857,7 @@ namespace DANO
                     else
                     {
                         DANOLoader.Log.LogInfo("[DANO Console] 未登録コマンド");
-                        HudAPI.LocalMessage($"<color=#FF4444>未登録: {text}</color>");
+                        Hud.LocalMessage($"<color=#FF4444>未登録: {text}</color>");
                     }
                 }
                 _consoleInput = "";

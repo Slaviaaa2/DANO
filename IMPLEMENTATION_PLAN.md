@@ -659,3 +659,72 @@ v0.3.0 で失敗したのは手動 `harmony.Patch()` 方式のみで、属性方
 | `API/DanoWeapon.cs` | IsFirearm, WeaponType, ReserveAmmo, ChargedBullets 追加、Ammo を reloadWeapon 対応 |
 | `DANO.Template/MyPlugin.cs` | WeaponFired/ItemDropped イベント、/guntest /eventtest コマンド追加 |
 | `CLAUDE.md` | ハイブリッド方式、武器階層、Harmony 制約を文書化 |
+
+---
+
+# DANOUE Ultimate Edition — CustomItems / CustomRoles
+
+## コンテキスト
+
+DANOの公開APIを基盤として、EXILED の `CustomItem` / `CustomRole` 相当の上位レイヤーライブラリを追加する。
+別プロジェクト（`DANOUE.CustomItems`, `DANOUE.CustomRoles`）として管理し、DANOプラグイン開発者が
+依存ライブラリとして利用する。
+
+## アーキテクチャ
+
+| 項目 | 設計 |
+|------|------|
+| 登録方式 | `Register<T>()` / `RegisterAll(Assembly)` の両対応 |
+| イベント購読 | 初回 `Register<T>()` 時にEventBusへ遅延サブスクライブ（lazy-init） |
+| アイテム追跡 | `Dictionary<ItemBehaviour, CustomItem>`（Unity null チェック定期プルーニング） |
+| ロール追跡 | `Dictionary<int, CustomRole>`（プレイヤーID） |
+| 武器イベント制約 | `OnFiring/OnFired/OnReloading/OnReloaded` はFishNet制約によりローカルプレイヤーのみ発火 |
+| HUD統合 | `PickupHint`（拾得時）/ `SelectHint`（手持ち時）/ ロール割当ヒント |
+| 出力先 | `STRAFTAT\BepInEx\plugins\DANO\DANOUE.CustomItems.dll` / `DANOUE.CustomRoles.dll` |
+
+## 新規ファイル
+
+| ファイル | 内容 |
+|----------|------|
+| `DANOUE.CustomItems/DANOUE.CustomItems.csproj` | プロジェクト定義（ProjectReference: DANO.Core） |
+| `DANOUE.CustomItems/CustomItem.cs` | `CustomItem` 抽象基底クラス |
+| `DANOUE.CustomRoles/DANOUE.CustomRoles.csproj` | プロジェクト定義（ProjectReference: DANO.Core） |
+| `DANOUE.CustomRoles/CustomRole.cs` | `CustomRole` 抽象基底クラス |
+
+## CustomItem API 概要
+
+```csharp
+public abstract class CustomItem
+{
+    // 必須: Id, Name, BaseWeaponName
+    // 任意: Description, PickupHint, SelectHint
+
+    // 登録: CustomItem.Register<MyItem>() / RegisterAll(assembly)
+    // 配布: ci.Give(player) / ci.Spawn(position)
+    // クエリ: CustomItem.Check(item) / TryGet(item, out ci) / Get<T>()
+
+    // フック (virtual):
+    //   OnAcquired / OnReleased / OnPickingUp / OnPickedUp
+    //   OnDropping / OnDropped / OnFiring* / OnFired* / OnReloading* / OnReloaded*
+    //   OnOwnerDamaging / OnOwnerDying / OnRoundStarted
+    //   * = ローカルプレイヤーのみ（FishNet制約）
+}
+```
+
+## CustomRole API 概要
+
+```csharp
+public abstract class CustomRole
+{
+    // 必須: Id, RoleName
+    // 任意: Description, TeamId, MaxHealth, SpawnItems, KeepRoleOnRoundReset, RoleColor
+
+    // 登録: CustomRole.Register<MyRole>() / RegisterAll(assembly)
+    // 割当: role.Assign(player) / role.Remove(player) / role.RemoveAll()
+    // クエリ: CustomRole.Check(player) / TryGet(player, out role) / Get<T>() / role.GetPlayers()
+
+    // フック (virtual):
+    //   OnRoleAssigned / OnRoleRemoved / OnSpawned / OnDamaging
+    //   OnDamaged / OnDying / OnRoundStarted / OnRoundEnded / OnTeamChanged
+}
+```

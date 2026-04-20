@@ -182,7 +182,7 @@ namespace DANO.Patches
         [HarmonyPostfix]
         public static void Postfix(Door __instance, bool __state)
         {
-            var door = API.DanoDoor.Get(__instance);
+            var door = API.Door.Get(__instance);
             EventBus.Raise(new DoorInteractedEvent(door, __state));
         }
     }

@@ -57,7 +57,7 @@ namespace DANO.API
                 ? trimmed.Substring(commandName.Length).TrimStart()
                 : "";
 
-            var sender = PlayerAPI.Local;
+            var sender = Player.Local;
             var ctx = new CommandContext(commandName, args, rawArgs, sender);
 
             // ホスト限定コマンドの権限チェック
