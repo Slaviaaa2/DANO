@@ -167,7 +167,7 @@ namespace MyPlugin
 
         private void OnInfoCommand(CommandContext ctx)
         {
-            var map     = Map.CurrentMap ?? "不明";
+            var map     = DANO.API.Map.CurrentMap ?? "不明";
             var players = Server.PlayerCount;
             var max     = Server.MaxPlayers;
             var take    = Round.CurrentTake + 1;
@@ -201,7 +201,7 @@ namespace MyPlugin
                 info += $" | ノックバック: {weapon.MeleeKnockback:F1}";
 
             // 具象型へのキャスト例
-            if (weapon is Shotgun sg)
+            if (weapon is DANO.API.Shotgun sg)
                 info += $" | ペレット: {sg.PelletCount}";
 
             ctx.Reply(info);
@@ -225,7 +225,7 @@ namespace MyPlugin
         {
             if (ctx.Args.Length < 1 || !int.TryParse(ctx.Args[0], out var targetId)) return;
 
-            var target = Player.Get(targetId);
+            var target = DANO.API.Player.Get(targetId);
             if (target == null) { ctx.Reply("プレイヤーが見つかりません。"); return; }
 
             if (target.CanMove)
@@ -248,7 +248,7 @@ namespace MyPlugin
 
         private void OnDoorsCommand(CommandContext ctx)
         {
-            foreach (var door in Door.List)
+            foreach (var door in DANO.API.Door.List)
                 ctx.Reply($"  {door.Name}: {(door.IsOpen ? "開" : "閉")}");
         }
 
@@ -256,7 +256,7 @@ namespace MyPlugin
         {
             if (ctx.Args.Length < 1) { ctx.Reply("使い方: /find <名前>"); return; }
 
-            var target = Player.GetByName(ctx.Args[0]);
+            var target = DANO.API.Player.GetByName(ctx.Args[0]);
             if (target == null) { ctx.Reply("見つかりませんでした。"); return; }
 
             ctx.Reply($"ID: {target.Id} | 名前: {target.Name} | HP: {target.Health}/{target.MaxHealth} | チーム: {target.TeamId}");
