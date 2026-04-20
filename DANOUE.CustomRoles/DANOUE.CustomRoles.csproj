@@ -1,53 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
     <AssemblyName>DANOUE.CustomRoles</AssemblyName>
     <RootNamespace>DANOUE</RootNamespace>
     <PackageVersion>1.0.0</PackageVersion>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
-  </PropertyGroup>
-
-  <PropertyGroup>
-    <StraftatDir Condition="'$(STRAFTAT_DIR)' != ''">$(STRAFTAT_DIR)</StraftatDir>
-    <StraftatDir Condition="'$(StraftatDir)' == ''">D:\SteamLibrary\steamapps\common\STRAFTAT</StraftatDir>
-    <StraftatLibs Condition="'$(STRAFTAT_LIBS)' != ''">$(STRAFTAT_LIBS)</StraftatLibs>
-    <StraftatLibs Condition="'$(StraftatLibs)' == ''">D:\RiderWorks\STRAFTAT_Libs</StraftatLibs>
     <OutputPath>$(StraftatDir)\BepInEx\plugins\DANO\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- DANO フレームワーク（ソース参照） -->
     <ProjectReference Include="..\DANO.Core\DANO.Core.csproj">
       <Private>false</Private>
     </ProjectReference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- Unity Engine -->
-    <Reference Include="UnityEngine">
-      <HintPath>$(StraftatLibs)\UnityEngine.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(StraftatLibs)\UnityEngine.CoreModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-
-    <!-- ゲームアセンブリ（PlayerHealth 等） -->
-    <Reference Include="Assembly-CSharp">
-      <HintPath>$(StraftatLibs)\publicized\Assembly-CSharp_publicized.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-
-    <!-- FishNet（PlayerHealth の基底クラス NetworkBehaviour） -->
-    <Reference Include="FishNet.Runtime">
-      <HintPath>$(StraftatLibs)\FishNet.Runtime.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
   </ItemGroup>
 
 </Project>

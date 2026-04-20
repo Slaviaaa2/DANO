@@ -1,49 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
     <!-- ↓ プラグイン名に変更する -->
     <AssemblyName>MyPlugin</AssemblyName>
     <RootNamespace>MyPlugin</RootNamespace>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
-  </PropertyGroup>
-
-  <!-- 環境変数 or デフォルトパス -->
-  <PropertyGroup>
-    <StraftatDir Condition="'$(STRAFTAT_DIR)' != ''">$(STRAFTAT_DIR)</StraftatDir>
-    <StraftatDir Condition="'$(StraftatDir)' == ''">D:\SteamLibrary\steamapps\common\STRAFTAT</StraftatDir>
-    <StraftatLibs Condition="'$(STRAFTAT_LIBS)' != ''">$(STRAFTAT_LIBS)</StraftatLibs>
-    <StraftatLibs Condition="'$(StraftatLibs)' == ''">D:\RiderWorks\STRAFTAT_Libs</StraftatLibs>
-    <OutputPath>$(StraftatDir)\DANO\mods\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- DANO フレームワーク本体 -->
     <Reference Include="DANO.Core">
       <HintPath>$(StraftatDir)\BepInEx\plugins\DANO\DANO.Core.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-
-    <!-- BepInEx（ログ用） -->
-    <Reference Include="BepInEx">
-      <HintPath>$(StraftatLibs)\BepInEx\BepInEx.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-
-    <!-- Unity Engine -->
-    <Reference Include="UnityEngine">
-      <HintPath>$(StraftatLibs)\UnityEngine.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="UnityEngine.CoreModule">
-      <HintPath>$(StraftatLibs)\UnityEngine.CoreModule.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Unity.TextMeshPro">
-      <HintPath>$(StraftatLibs)\Unity.TextMeshPro.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

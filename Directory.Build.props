@@ -1,0 +1,112 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+
+    <!-- パス解決（環境変数 > デフォルト） -->
+    <StraftatDir Condition="'$(STRAFTAT_DIR)' != ''">$(STRAFTAT_DIR)</StraftatDir>
+    <StraftatDir Condition="'$(StraftatDir)' == ''">D:\SteamLibrary\steamapps\common\STRAFTAT</StraftatDir>
+    <StraftatLibs Condition="'$(STRAFTAT_LIBS)' != ''">$(STRAFTAT_LIBS)</StraftatLibs>
+    <StraftatLibs Condition="'$(StraftatLibs)' == ''">D:\RiderWorks\STRAFTAT_Libs</StraftatLibs>
+
+    <!-- プラグインのデフォルト出力先（DANO.Core / DANOUE は各 csproj で上書き） -->
+    <OutputPath>$(StraftatDir)\DANO\mods\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- BepInEx -->
+    <Reference Include="BepInEx">
+      <HintPath>$(StraftatLibs)\BepInEx\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(StraftatLibs)\BepInEx\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Unity Engine -->
+    <Reference Include="UnityEngine">
+      <HintPath>$(StraftatLibs)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(StraftatLibs)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(StraftatLibs)\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(StraftatLibs)\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(StraftatLibs)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(StraftatLibs)\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(StraftatLibs)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(StraftatLibs)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(StraftatLibs)\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextCoreFontEngineModule">
+      <HintPath>$(StraftatLibs)\UnityEngine.TextCoreFontEngineModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- ゲームアセンブリ（publicized 版） -->
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(StraftatLibs)\publicized\Assembly-CSharp_publicized.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- FishNet -->
+    <Reference Include="FishNet.Runtime">
+      <HintPath>$(StraftatLibs)\FishNet.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Newtonsoft.Json -->
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(StraftatLibs)\Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- ComputerysModdingUtilities -->
+    <Reference Include="ComputerysModdingUtilities">
+      <HintPath>$(StraftatLibs)\ComputerysModdingUtilities.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Steamworks / Heathen -->
+    <Reference Include="com.rlabrecque.steamworks.net">
+      <HintPath>$(StraftatLibs)\com.rlabrecque.steamworks.net.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Heathen.Steamworks">
+      <HintPath>$(StraftatLibs)\Heathen.Steamworks.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Heathen.Core">
+      <HintPath>$(StraftatLibs)\Heathen.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
